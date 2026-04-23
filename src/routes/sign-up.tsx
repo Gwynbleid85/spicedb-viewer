@@ -1,6 +1,8 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { AuthForm } from "#/components/auth/auth-form";
+import { getSafeRedirect } from "#/components/auth/auth-redirect";
+import { AuthShell } from "#/components/auth/auth-shell";
+import { SignUpForm } from "#/components/auth/sign-up-form";
 import { getSession } from "#/server/auth/session";
 
 type AuthSearch = {
@@ -11,14 +13,6 @@ function validateAuthSearch(search: Record<string, unknown>): AuthSearch {
 	return {
 		redirect: typeof search.redirect === "string" ? search.redirect : undefined,
 	};
-}
-
-function getSafeRedirect(redirectTo: string | undefined) {
-	if (redirectTo?.startsWith("/") && !redirectTo.startsWith("//")) {
-		return redirectTo;
-	}
-
-	return "/dashboard";
 }
 
 export const Route = createFileRoute("/sign-up")({
@@ -36,5 +30,14 @@ export const Route = createFileRoute("/sign-up")({
 function SignUp() {
 	const search = Route.useSearch();
 
-	return <AuthForm mode="sign-up" redirectTo={search.redirect} />;
+	return (
+		<AuthShell
+			description="Create a local account with email and password."
+			mode="sign-up"
+			redirectTo={search.redirect}
+			title="Sign up"
+		>
+			<SignUpForm redirectTo={search.redirect} />
+		</AuthShell>
+	);
 }
