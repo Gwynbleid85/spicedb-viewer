@@ -5,11 +5,21 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 
 import { getSafeRedirect } from "#/components/auth/auth-redirect";
+import { Alert, AlertDescription } from "#/components/ui/alert";
+import { Button } from "#/components/ui/button";
+import {
+	Field,
+	FieldContent,
+	FieldError,
+	FieldGroup,
+	FieldLabel,
+} from "#/components/ui/field";
+import { Input } from "#/components/ui/input";
 import { authClient } from "#/lib/auth-client";
 
 const signInSchema = z.object({
 	email: z.email("Enter a valid email address.").trim(),
-	password: z.string(),
+	password: z.string().min(8, "Password must be at least 8 characters."),
 });
 
 type SignInFormValues = z.infer<typeof signInSchema>;
@@ -53,61 +63,55 @@ export function SignInForm({ redirectTo }: SignInFormProps) {
 	}
 
 	return (
-		<form className="space-y-5" noValidate onSubmit={handleSubmit(onSubmit)}>
-			<label className="block" htmlFor="sign-in-email">
-				<span className="text-sm font-semibold text-[var(--sea-ink)]">
-					Email
-				</span>
-				<input
-					autoComplete="email"
-					className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3 text-[var(--sea-ink)] outline-none transition focus:border-[var(--lagoon)] focus:ring-4 focus:ring-teal-200/40"
-					id="sign-in-email"
-					type="email"
-					{...register("email")}
-					aria-invalid={errors.email ? "true" : "false"}
-				/>
-				{errors.email ? (
-					<p className="mt-2 text-sm font-medium text-red-700">
-						{errors.email.message}
-					</p>
-				) : null}
-			</label>
+		<form
+			className="flex flex-col gap-5"
+			noValidate
+			onSubmit={handleSubmit(onSubmit)}
+		>
+			<FieldGroup>
+				<Field data-invalid={errors.email ? "true" : undefined}>
+					<FieldLabel htmlFor="sign-in-email">Email</FieldLabel>
+					<FieldContent>
+						<Input
+							autoComplete="email"
+							id="sign-in-email"
+							type="email"
+							aria-invalid={errors.email ? "true" : "false"}
+							{...register("email")}
+						/>
+						<FieldError errors={[errors.email]} />
+					</FieldContent>
+				</Field>
 
-			<label className="block" htmlFor="sign-in-password">
-				<span className="text-sm font-semibold text-[var(--sea-ink)]">
-					Password
-				</span>
-				<input
-					autoComplete="current-password"
-					className="mt-2 w-full rounded-2xl border border-[var(--line)] bg-white/80 px-4 py-3 text-[var(--sea-ink)] outline-none transition focus:border-[var(--lagoon)] focus:ring-4 focus:ring-teal-200/40"
-					id="sign-in-password"
-					type="password"
-					{...register("password")}
-					aria-invalid={errors.password ? "true" : "false"}
-				/>
-				{errors.password ? (
-					<p className="mt-2 text-sm font-medium text-red-700">
-						{errors.password.message}
-					</p>
-				) : null}
-			</label>
+				<Field data-invalid={errors.password ? "true" : undefined}>
+					<FieldLabel htmlFor="sign-in-password">Password</FieldLabel>
+					<FieldContent>
+						<Input
+							autoComplete="current-password"
+							id="sign-in-password"
+							type="password"
+							aria-invalid={errors.password ? "true" : "false"}
+							{...register("password")}
+						/>
+						<FieldError errors={[errors.password]} />
+					</FieldContent>
+				</Field>
+			</FieldGroup>
 
 			{authError ? (
-				<p
-					className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700"
-					role="alert"
-				>
-					{authError}
-				</p>
+				<Alert variant="destructive">
+					<AlertDescription>{authError}</AlertDescription>
+				</Alert>
 			) : null}
 
-			<button
-				className="w-full rounded-2xl bg-[var(--sea-ink)] px-5 py-3 font-bold text-white shadow-lg shadow-emerald-950/10 transition hover:-translate-y-0.5 hover:bg-[var(--palm)] disabled:cursor-not-allowed disabled:opacity-60"
+			<Button
+				className="w-full"
 				disabled={isSubmitting}
+				size="lg"
 				type="submit"
 			>
 				{isSubmitting ? "Working..." : "Sign in"}
-			</button>
+			</Button>
 		</form>
 	);
 }
