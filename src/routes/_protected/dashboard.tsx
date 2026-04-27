@@ -39,6 +39,13 @@ function Dashboard() {
 					>
 						{isSigningOut ? "Signing out..." : "Sign out"}
 					</Button>
+					<Button
+						onClick={() => router.navigate({ to: "/spicedb" })}
+						type="button"
+						variant="secondary"
+					>
+						Open SpiceDB graph
+					</Button>
 				</CardContent>
 			</Card>
 

@@ -17,7 +17,9 @@
     "db:migrate": "drizzle-kit migrate"
   },
   "dependencies": {
+    "@authzed/authzed-node": "^1.6.1",
     "@base-ui/react": "^1.4.1",
+    "@dagrejs/dagre": "^3.0.0",
     "@fontsource-variable/geist": "^5.2.8",
     "@hookform/resolvers": "^5.2.2",
     "@libsql/client": "^0.17.3",
@@ -30,6 +32,7 @@
     "@tanstack/react-router-ssr-query": "latest",
     "@tanstack/react-start": "latest",
     "@tanstack/router-plugin": "^1.132.0",
+    "@xyflow/react": "^12.10.2",
     "better-auth": "^1.6.8",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",

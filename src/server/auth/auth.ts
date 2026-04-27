@@ -9,7 +9,7 @@ const localDevelopmentSecret =
 	"development-only-change-this-secret-before-deploying";
 
 export const auth = betterAuth({
-	baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3002",
+	baseURL: process.env.BETTER_AUTH_URL ?? "http://localhost:3000",
 	secret: process.env.BETTER_AUTH_SECRET ?? localDevelopmentSecret,
 	database: drizzleAdapter(db, {
 		provider: "sqlite",

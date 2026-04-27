@@ -121,6 +121,11 @@
   --chart-3: oklch(0.398 0.07 227.392);
   --chart-4: oklch(0.828 0.189 84.429);
   --chart-5: oklch(0.769 0.188 70.08);
+  --chart-6: oklch(0.627 0.265 303.9);
+  --chart-7: oklch(0.588 0.158 241.966);
+  --chart-8: oklch(0.703 0.189 149.214);
+  --chart-9: oklch(0.681 0.162 75.834);
+  --chart-10: oklch(0.621 0.214 17.452);
   --sidebar: var(--card);
   --sidebar-foreground: var(--text-heading);
   --sidebar-primary: var(--primary);
@@ -238,6 +243,12 @@
   --page-gradient-mid: var(--neutral-color-50);
   --page-gradient-end: var(--background);
   --inset-highlight: rgb(194 247 238 / 14%);
+
+  --chart-6: oklch(0.74 0.2 303.9);
+  --chart-7: oklch(0.742 0.142 233.27);
+  --chart-8: oklch(0.765 0.177 163.223);
+  --chart-9: oklch(0.82 0.159 82.533);
+  --chart-10: oklch(0.704 0.191 22.216);
 }
 
 @theme inline {
@@ -292,6 +303,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-4: var(--chart-4);
   --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
+  --color-chart-9: var(--chart-9);
+  --color-chart-10: var(--chart-10);
   --color-sidebar: var(--sidebar);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-primary: var(--sidebar-primary);
