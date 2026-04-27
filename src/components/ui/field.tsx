@@ -24,7 +24,7 @@ function FieldLegend({
 			data-slot="field-legend"
 			data-variant={variant}
 			className={cn(
-				"mb-1.5 font-semibold text-[var(--sea-ink)] data-[variant=label]:text-sm data-[variant=legend]:text-base",
+				"mb-1.5 font-semibold text-text-heading data-[variant=label]:text-sm data-[variant=legend]:text-base",
 				className,
 			)}
 			{...props}
@@ -95,7 +95,7 @@ function FieldLabel({
 		<Label
 			data-slot="field-label"
 			className={cn(
-				"group/field-label text-sm font-semibold leading-none text-[var(--sea-ink)] group-data-[disabled=true]/field:opacity-50",
+				"group/field-label text-sm font-semibold leading-none text-text-heading group-data-[disabled=true]/field:opacity-50",
 				className,
 			)}
 			{...props}
@@ -108,7 +108,7 @@ function FieldTitle({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="field-label"
 			className={cn(
-				"flex w-fit items-center gap-2 text-sm font-semibold text-[var(--sea-ink)] group-data-[disabled=true]/field:opacity-50",
+				"flex w-fit items-center gap-2 text-sm font-semibold text-text-heading group-data-[disabled=true]/field:opacity-50",
 				className,
 			)}
 			{...props}
@@ -120,7 +120,7 @@ function FieldDescription({ className, ...props }: React.ComponentProps<"p">) {
 	return (
 		<p
 			data-slot="field-description"
-			className={cn("text-sm leading-6 text-[var(--sea-ink-soft)]", className)}
+			className={cn("text-sm leading-6 text-text-caption", className)}
 			{...props}
 		/>
 	);
@@ -140,10 +140,10 @@ function FieldSeparator({
 			className={cn("relative -my-1 h-5 text-sm", className)}
 			{...props}
 		>
-			<Separator className="absolute inset-0 top-1/2 bg-[var(--line)]" />
+			<Separator className="absolute inset-0 top-1/2 bg-border-default" />
 			{children ? (
 				<span
-					className="relative mx-auto block w-fit bg-[var(--surface-strong)] px-2 text-[var(--sea-ink-soft)]"
+					className="relative mx-auto block w-fit bg-surface-panel px-2 text-text-caption"
 					data-slot="field-separator-content"
 				>
 					{children}
@@ -195,7 +195,7 @@ function FieldError({
 		<div
 			role="alert"
 			data-slot="field-error"
-			className={cn("text-sm font-medium text-red-700", className)}
+			className={cn("text-sm font-medium text-text-danger", className)}
 			{...props}
 		>
 			{content}

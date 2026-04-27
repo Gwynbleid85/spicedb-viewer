@@ -12,7 +12,7 @@ function Card({
 			data-slot="card"
 			data-size={size}
 			className={cn(
-				"group/card flex flex-col gap-6 overflow-hidden rounded-[2rem] border border-[var(--line)] bg-[var(--surface-strong)] py-6 text-sm text-[var(--sea-ink)] shadow-2xl shadow-emerald-950/10 backdrop-blur has-data-[slot=card-footer]:pb-0 data-[size=sm]:gap-4 data-[size=sm]:rounded-3xl data-[size=sm]:py-4",
+				"group/card flex flex-col gap-6 overflow-hidden rounded-5xl border border-border-default bg-surface-panel py-6 text-sm text-text-body shadow-brand-lg backdrop-blur has-data-[slot=card-footer]:pb-0 data-[size=sm]:gap-4 data-[size=sm]:rounded-3xl data-[size=sm]:py-4",
 				className,
 			)}
 			{...props}
@@ -38,7 +38,7 @@ function CardTitle({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="card-title"
 			className={cn(
-				"font-heading text-2xl leading-tight font-bold text-[var(--sea-ink)] group-data-[size=sm]/card:text-xl",
+				"font-heading text-2xl leading-tight font-bold text-text-heading group-data-[size=sm]/card:text-xl",
 				className,
 			)}
 			{...props}
@@ -50,10 +50,7 @@ function CardDescription({ className, ...props }: React.ComponentProps<"div">) {
 	return (
 		<div
 			data-slot="card-description"
-			className={cn(
-				"text-base leading-7 text-[var(--sea-ink-soft)]",
-				className,
-			)}
+			className={cn("text-base leading-7 text-text-caption", className)}
 			{...props}
 		/>
 	);
@@ -87,7 +84,7 @@ function CardFooter({ className, ...props }: React.ComponentProps<"div">) {
 		<div
 			data-slot="card-footer"
 			className={cn(
-				"flex items-center rounded-b-[2rem] border-t border-[var(--line)] bg-white/30 p-6 group-data-[size=sm]/card:p-5",
+				"flex items-center rounded-b-5xl border-t border-border-default bg-surface-overlay-footer p-6 group-data-[size=sm]/card:p-5",
 				className,
 			)}
 			{...props}

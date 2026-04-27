@@ -9,9 +9,9 @@ const alertVariants = cva(
 		variants: {
 			variant: {
 				default:
-					"border-[var(--line)] bg-white/70 text-[var(--sea-ink)] shadow-lg shadow-emerald-950/5",
+					"border-border-default bg-surface-overlay-soft text-text-heading shadow-brand-sm",
 				destructive:
-					"border-red-200 bg-red-50 text-red-700 *:data-[slot=alert-description]:text-red-700/90",
+					"border-border-danger bg-destructive text-text-danger *:data-[slot=alert-description]:text-text-danger/90",
 			},
 		},
 		defaultVariants: {
@@ -55,7 +55,7 @@ function AlertDescription({
 	return (
 		<div
 			data-slot="alert-description"
-			className={cn("text-sm leading-6 text-[var(--sea-ink-soft)]", className)}
+			className={cn("text-sm leading-6 text-text-caption", className)}
 			{...props}
 		/>
 	);

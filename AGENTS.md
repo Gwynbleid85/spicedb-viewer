@@ -1,6 +1,15 @@
 
 
 - Use shadcn for most of the UI components based on mono-ui
+- For any styling, theming, design system, Tailwind, layout, or UI refinement task, always use the `tailwind-design-system` skill first.
+- Before changing styles, always inspect `design/theme-contract.md` and `src/styles.css` to understand the current token contract.
+- Always use the prepared Tailwind tokens and semantic utilities as much as possible. Prefer existing utilities like `bg-surface-*`, `text-text-*`, `ring-*`, `shadow-brand-*`, `rounded-*`, `font-*`, and semantic color scale utilities before introducing anything new.
+- Always prefer Tailwind-native token usage over arbitrary values. If a token exists or should exist, use Tailwind utilities instead of raw expressions like `bg-[var(...)]`, `shadow-[var(...)]`, `rounded-[2rem]`, `tracking-[0.28em]`, `text-white`, `bg-white/70`, or similar hardcoded visual values.
+- If a reusable visual value is missing, add it to `src/styles.css` using the existing Tailwind-friendly token namespaces like `--color-*`, `--shadow-*`, `--radius-*`, and `--font-*`, then consume it through Tailwind utilities.
+- Do not introduce raw brand tokens like `--sea-ink`, `--lagoon`, or other bespoke visual names. Keep tokens semantic and aligned with `design/theme-contract.md`.
+- Preserve the current design of the app. Standardize and extend the existing look through tokens and shared primitives instead of redesigning pages opportunistically.
+- Arbitrary values are allowed only for truly one-off decorative effects that are not reusable design tokens, such as unusual blob radii, complex gradients, masks, or scene-specific artwork.
+- When a styling problem comes from a shared primitive or wrapper, fix the shared component contract instead of working around it at one page-level call site.
 - For form use ALWAYS react-hook-form, never use useState for form state management. react-hook-form is optimized for performance and provides a better developer experience. And aways use zod for validation, never use yup. Zod is more powerful and provides better TypeScript support.
 - Use tanstack-query for data fetching and caching, never use useEffect for data fetching. tanstack-query provides a better developer experience and is optimized for performance.
 - Use better-auth for authentication, never use custom authentication solutions. better-auth provides a better developer experience and is optimized for security.

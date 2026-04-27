@@ -8,9 +8,11 @@ const badgeVariants = cva(
 	{
 		variants: {
 			variant: {
-				default:
-					"border-[var(--chip-line)] bg-[var(--chip-bg)] text-[var(--kicker)]",
-				secondary: "border-[var(--line)] bg-white/72 text-[var(--sea-ink)]",
+				default: "border-border-chip bg-surface-chip text-text-kicker",
+				secondary:
+					"border-border-default bg-surface-elevated text-text-heading",
+				success:
+					"border-border-success/20 bg-surface-success-subtle text-text-success",
 			},
 		},
 		defaultVariants: {
