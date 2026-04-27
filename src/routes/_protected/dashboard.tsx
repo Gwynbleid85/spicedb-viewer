@@ -22,14 +22,14 @@ function Dashboard() {
 	}
 
 	return (
-		<main className="mx-auto flex min-h-screen w-full max-w-6xl flex-col px-6 py-8">
-			<Card className="gap-0 rounded-5xl bg-surface-header py-0 shadow-brand-header">
-				<CardContent className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
+		<main className="mx-auto flex min-h-screen w-full max-w-5xl flex-col px-5 py-6 sm:px-8">
+			<Card className="gap-0 bg-surface-header py-0 shadow-brand-header">
+				<CardContent className="flex flex-wrap items-center justify-between gap-4 px-4 py-3 sm:px-5">
 					<div>
-						<p className="text-xs font-bold uppercase tracking-[0.24em] text-text-kicker">
+						<p className="text-xs font-semibold uppercase tracking-wide text-text-kicker">
 							Protected
 						</p>
-						<CardTitle className="mt-1 text-3xl">Dashboard</CardTitle>
+						<CardTitle className="mt-1">Dashboard</CardTitle>
 					</div>
 					<Button
 						disabled={isSigningOut}
@@ -42,51 +42,45 @@ function Dashboard() {
 				</CardContent>
 			</Card>
 
-			<section className="grid flex-1 items-center py-12">
-				<Card className="overflow-hidden rounded-6xl p-8 sm:p-12">
-					<CardContent className="max-w-3xl px-0">
-						<p className="text-sm font-bold uppercase tracking-[0.24em] text-text-kicker">
+			<section className="grid flex-1 items-center py-10">
+				<Card className="p-0">
+					<CardContent className="px-5 py-6 sm:px-6 sm:py-8">
+						<p className="text-xs font-semibold uppercase tracking-wide text-text-kicker">
 							Server checked session
 						</p>
-						<CardTitle className="mt-4 text-5xl leading-tight">
+						<CardTitle className="mt-3 text-3xl leading-tight sm:text-4xl">
 							Welcome, {user.name}
 						</CardTitle>
-						<p className="mt-5 text-lg leading-8 text-text-caption">
+						<p className="mt-4 max-w-3xl text-base leading-7 text-text-caption">
 							This route is inside the pathless protected layout. The layout
 							calls a server function from <code>beforeLoad</code>, so direct
 							page loads and client-side navigation both require a valid Better
 							Auth session.
 						</p>
-					</CardContent>
 
-					<div className="mt-8 grid gap-4 sm:grid-cols-2">
-						<Card
-							className="rounded-3xl bg-surface-overlay-soft py-5"
-							size="sm"
-						>
-							<CardContent className="px-5">
-								<p className="text-xs font-bold uppercase tracking-[0.2em] text-text-kicker">
-									Email
-								</p>
-								<p className="mt-2 font-semibold text-text-heading">
-									{user.email}
-								</p>
-							</CardContent>
-						</Card>
-						<Card
-							className="rounded-3xl bg-surface-overlay-soft py-5"
-							size="sm"
-						>
-							<CardContent className="px-5">
-								<p className="text-xs font-bold uppercase tracking-[0.2em] text-text-kicker">
-									User ID
-								</p>
-								<p className="mt-2 break-all font-mono text-sm text-text-heading">
-									{user.id}
-								</p>
-							</CardContent>
-						</Card>
-					</div>
+						<div className="mt-7 grid gap-3 sm:grid-cols-2">
+							<Card className="bg-surface-overlay-soft py-4" size="sm">
+								<CardContent className="px-4">
+									<p className="text-xs font-semibold uppercase tracking-wide text-text-kicker">
+										Email
+									</p>
+									<p className="mt-2 font-semibold text-text-heading">
+										{user.email}
+									</p>
+								</CardContent>
+							</Card>
+							<Card className="bg-surface-overlay-soft py-4" size="sm">
+								<CardContent className="px-4">
+									<p className="text-xs font-semibold uppercase tracking-wide text-text-kicker">
+										User ID
+									</p>
+									<p className="mt-2 break-all font-mono text-sm text-text-heading">
+										{user.id}
+									</p>
+								</CardContent>
+							</Card>
+						</div>
+					</CardContent>
 				</Card>
 			</section>
 		</main>

@@ -9,7 +9,7 @@ function Input({ className, type, ...props }: React.ComponentProps<"input">) {
 			type={type}
 			data-slot="input"
 			className={cn(
-				"min-h-12 w-full min-w-0 rounded-2xl border border-border-default bg-surface-field px-4 py-3 text-base text-text-heading outline-none transition placeholder:text-[color:color-mix(in_oklab,var(--text-caption)_65%,white_35%)] focus-visible:border-ring focus-visible:ring-4 focus-visible:ring-focus-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-surface-overlay-muted disabled:opacity-60 aria-invalid:border-border-danger aria-invalid:ring-4 aria-invalid:ring-danger-ring md:text-base",
+				"min-h-10 w-full min-w-0 rounded-lg border border-border-default bg-surface-field px-3 py-2 text-base text-text-heading outline-none transition-colors placeholder:text-text-caption focus-visible:border-ring focus-visible:ring-2 focus-visible:ring-focus-ring disabled:pointer-events-none disabled:cursor-not-allowed disabled:bg-surface-overlay-muted disabled:opacity-60 aria-invalid:border-border-danger aria-invalid:ring-2 aria-invalid:ring-danger-ring md:text-base",
 				className,
 			)}
 			{...props}
