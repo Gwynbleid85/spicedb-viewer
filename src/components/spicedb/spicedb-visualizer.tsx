@@ -20,7 +20,6 @@ import { useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "#/components/ui/card";
 import { Separator } from "#/components/ui/separator";
 import type {
 	SpiceDbGraph,
@@ -381,19 +380,17 @@ function GraphSkeleton() {
 	);
 }
 
-function StatBadge({ label, value }: { label: string; value?: number }) {
+function StatInline({ label, value }: { label: string; value?: number }) {
 	if (value === undefined) {
 		return null;
 	}
 
 	return (
-		<div className="rounded-2xl border border-border-chip bg-surface-chip px-4 py-3">
-			<p className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
-				{label}
-			</p>
-			<p className="mt-1 font-heading text-2xl font-bold text-text-heading">
+		<div className="flex items-baseline gap-1.5">
+			<span className="font-heading text-sm font-bold text-text-heading">
 				{value}
-			</p>
+			</span>
+			<span className="text-xs text-text-caption">{label}</span>
 		</div>
 	);
 }
@@ -503,14 +500,12 @@ function GraphCanvas({
 	}
 
 	return (
-		<div className="h-dvh min-h-96 max-h-screen overflow-hidden rounded-5xl border border-border-default bg-surface-overlay-soft">
-			<DraggableGraph
-				key={`${graph.mode}:${graph.readAt ?? "latest"}:${graph.nodes.length}:${graph.edges.length}`}
-				edges={flow.edges}
-				nodes={flow.nodes}
-				onSelect={onSelect}
-			/>
-		</div>
+		<DraggableGraph
+			key={`${graph.mode}:${graph.readAt ?? "latest"}:${graph.nodes.length}:${graph.edges.length}`}
+			edges={flow.edges}
+			nodes={flow.nodes}
+			onSelect={onSelect}
+		/>
 	);
 }
 
@@ -562,87 +557,98 @@ export function SpiceDbVisualizerPage() {
 	const graph = graphQuery.data;
 
 	return (
-		<main className="mx-auto flex min-h-screen w-full max-w-7xl flex-col gap-6 px-6 py-8">
-			<Card className="gap-0 rounded-5xl bg-surface-header py-0 shadow-brand-header">
-				<CardContent className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-					<div>
-						<p className="text-xs font-bold uppercase tracking-[0.24em] text-text-kicker">
-							SpiceDB
-						</p>
-						<CardTitle className="mt-1 text-3xl">Authorization graph</CardTitle>
+		<main className="relative h-dvh w-full overflow-hidden">
+			{/* Full-page canvas */}
+			<div className="absolute inset-0">
+				{graphQuery.isLoading ? (
+					<GraphSkeleton />
+				) : graph ? (
+					<GraphCanvas graph={graph} onSelect={setSelected} />
+				) : null}
+			</div>
+
+			{/* Floating header */}
+			<div className="pointer-events-none absolute inset-x-0 top-0 z-10 flex flex-col gap-3 p-4 bg-transparent shadow-none">
+				<div className="pointer-events-auto flex flex-col gap-0 py-0">
+					<div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
+						<div>
+							<p className="text-xs font-bold uppercase tracking-[0.24em] text-text-kicker">
+								SpiceDB
+							</p>
+							<h1 className="mt-1 font-heading text-3xl font-bold text-text-heading">
+								Authorization graph
+							</h1>
+						</div>
+						<div className="flex flex-wrap items-center gap-2">
+							<Button
+								onClick={() => setMode("schema")}
+								type="button"
+								variant={mode === "schema" ? "default" : "outline"}
+							>
+								Schema
+							</Button>
+							<Button
+								onClick={() => setMode("relationships")}
+								type="button"
+								variant={mode === "relationships" ? "default" : "outline"}
+							>
+								Relationships
+							</Button>
+							<Button
+								disabled={graphQuery.isFetching}
+								onClick={() => graphQuery.refetch()}
+								type="button"
+								variant="secondary"
+							>
+								{graphQuery.isFetching ? "Refreshing..." : "Refresh"}
+							</Button>
+						</div>
 					</div>
-					<div className="flex flex-wrap items-center gap-2">
-						<Button
-							onClick={() => setMode("schema")}
-							type="button"
-							variant={mode === "schema" ? "default" : "outline"}
-						>
-							Schema
-						</Button>
-						<Button
-							onClick={() => setMode("relationships")}
-							type="button"
-							variant={mode === "relationships" ? "default" : "outline"}
-						>
-							Relationships
-						</Button>
-						<Button
-							disabled={graphQuery.isFetching}
-							onClick={() => graphQuery.refetch()}
-							type="button"
-							variant="secondary"
-						>
-							{graphQuery.isFetching ? "Refreshing..." : "Refresh"}
-						</Button>
-					</div>
-				</CardContent>
-			</Card>
+				</div>
 
-			{graphQuery.error ? (
-				<Alert variant="destructive">
-					<AlertTitle>Unable to load SpiceDB graph</AlertTitle>
-					<AlertDescription>{graphQuery.error.message}</AlertDescription>
-				</Alert>
-			) : null}
+				{graphQuery.error ? (
+					<Alert className="pointer-events-auto" variant="destructive">
+						<AlertTitle>Unable to load SpiceDB graph</AlertTitle>
+						<AlertDescription>{graphQuery.error.message}</AlertDescription>
+					</Alert>
+				) : null}
 
-			{graph?.truncated && graph.message ? (
-				<Alert>
-					<AlertTitle>Relationship graph is capped</AlertTitle>
-					<AlertDescription>{graph.message}</AlertDescription>
-				</Alert>
-			) : null}
+				{graph?.truncated && graph.message ? (
+					<Alert className="pointer-events-auto">
+						<AlertTitle>Relationship graph is capped</AlertTitle>
+						<AlertDescription>{graph.message}</AlertDescription>
+					</Alert>
+				) : null}
+			</div>
 
+			{/* Floating stats card */}
 			{graph ? (
-				<div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
-					<StatBadge label="Nodes" value={graph.stats.nodeCount} />
-					<StatBadge label="Edges" value={graph.stats.edgeCount} />
-					<StatBadge label="Definitions" value={graph.stats.definitionCount} />
-					<StatBadge label="Relations" value={graph.stats.relationCount} />
-					<StatBadge label="Permissions" value={graph.stats.permissionCount} />
-					<StatBadge
-						label="Relationships"
-						value={graph.stats.relationshipCount}
-					/>
+				<div className="pointer-events-none absolute bottom-0 left-10 z-10 p-4">
+					<div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-border-chip bg-surface-chip/80 px-4 py-2.5 backdrop-blur-lg">
+						<StatInline label="Nodes" value={graph.stats.nodeCount} />
+						<StatInline label="Edges" value={graph.stats.edgeCount} />
+						<StatInline
+							label="Definitions"
+							value={graph.stats.definitionCount}
+						/>
+						<StatInline label="Relations" value={graph.stats.relationCount} />
+						<StatInline
+							label="Permissions"
+							value={graph.stats.permissionCount}
+						/>
+						<StatInline
+							label="Relationships"
+							value={graph.stats.relationshipCount}
+						/>
+					</div>
 				</div>
 			) : null}
 
-			<div className="grid flex-1 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
-				<Card className="min-w-0 rounded-6xl p-3">
-					<CardHeader className="px-3 pb-3">
-						<CardTitle className="text-2xl">
-							{mode === "schema" ? "Current schema" : "Current data"}
-						</CardTitle>
-					</CardHeader>
-					<CardContent className="px-0 pb-0">
-						{graphQuery.isLoading ? (
-							<GraphSkeleton />
-						) : graph ? (
-							<GraphCanvas graph={graph} onSelect={setSelected} />
-						) : null}
-					</CardContent>
-				</Card>
-
-				<MetadataPanel selected={selected} />
+			{/* Floating metadata panel */}
+			<div className="pointer-events-none absolute top-24 right-0 bottom-0 z-10 w-80 p-4">
+				<div className="pointer-events-auto max-h-full overflow-y-auto">
+					<MetadataPanel selected={selected} />
+				</div>
 			</div>
 		</main>
 	);
