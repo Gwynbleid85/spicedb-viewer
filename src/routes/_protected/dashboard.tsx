@@ -1,31 +1,19 @@
-import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
 
+import { AddShoppingItemForm } from "#/components/shopping/add-shopping-item-form";
+import { EditShoppingItemForm } from "#/components/shopping/edit-shopping-item-form";
+import { ShoppingListItem } from "#/components/shopping/shopping-list-item";
 import { Alert, AlertDescription } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
 import { Card, CardContent, CardTitle } from "#/components/ui/card";
-import {
-	Field,
-	FieldContent,
-	FieldError,
-	FieldGroup,
-	FieldLabel,
-} from "#/components/ui/field";
-import { Input } from "#/components/ui/input";
 import { authClient } from "#/lib/auth-client";
 import {
-	type CreateShoppingItemFormValues,
 	type CreateShoppingItemInput,
-	createShoppingItemSchema,
-	type ShoppingItem,
 	shoppingItemsQueryKey,
-	type UpdateShoppingItemFormValues,
 	type UpdateShoppingItemInput,
-	updateShoppingItemSchema,
 } from "#/lib/shopping";
 import { shoppingItemsQueryOptions } from "#/lib/shopping-query";
 import {
@@ -232,197 +220,5 @@ function Dashboard() {
 				</Card>
 			</section>
 		</main>
-	);
-}
-
-function AddShoppingItemForm({
-	isSubmitting,
-	onSubmit,
-}: {
-	isSubmitting: boolean;
-	onSubmit: (data: CreateShoppingItemInput) => Promise<unknown>;
-}) {
-	const {
-		register,
-		reset,
-		handleSubmit,
-		formState: { errors },
-	} = useForm<CreateShoppingItemFormValues, unknown, CreateShoppingItemInput>({
-		defaultValues: {
-			name: "",
-			quantity: 1,
-		},
-		resolver: zodResolver(createShoppingItemSchema),
-	});
-
-	async function submit(data: CreateShoppingItemInput) {
-		await onSubmit(data);
-		reset({ name: "", quantity: 1 });
-	}
-
-	return (
-		<form className="mt-6 flex flex-col gap-4" onSubmit={handleSubmit(submit)}>
-			<FieldGroup>
-				<Field data-invalid={errors.name ? "true" : undefined}>
-					<FieldLabel htmlFor="shopping-item-name">Item</FieldLabel>
-					<FieldContent>
-						<Input
-							id="shopping-item-name"
-							placeholder="Milk"
-							aria-invalid={errors.name ? "true" : "false"}
-							{...register("name")}
-						/>
-						<FieldError errors={[errors.name]} />
-					</FieldContent>
-				</Field>
-
-				<Field data-invalid={errors.quantity ? "true" : undefined}>
-					<FieldLabel htmlFor="shopping-item-quantity">Quantity</FieldLabel>
-					<FieldContent>
-						<Input
-							id="shopping-item-quantity"
-							min={1}
-							type="number"
-							aria-invalid={errors.quantity ? "true" : "false"}
-							{...register("quantity")}
-						/>
-						<FieldError errors={[errors.quantity]} />
-					</FieldContent>
-				</Field>
-			</FieldGroup>
-
-			<Button disabled={isSubmitting} type="submit">
-				{isSubmitting ? "Adding..." : "Add item"}
-			</Button>
-		</form>
-	);
-}
-
-function EditShoppingItemForm({
-	item,
-	onCancel,
-	onSubmit,
-}: {
-	item: ShoppingItem;
-	onCancel: () => void;
-	onSubmit: (data: UpdateShoppingItemInput) => Promise<unknown>;
-}) {
-	const {
-		register,
-		handleSubmit,
-		formState: { errors, isSubmitting },
-	} = useForm<UpdateShoppingItemFormValues, unknown, UpdateShoppingItemInput>({
-		defaultValues: {
-			id: item.id,
-			name: item.name,
-			quantity: item.quantity,
-		},
-		resolver: zodResolver(updateShoppingItemSchema),
-	});
-
-	return (
-		<form
-			className="rounded-2xl border border-border-default bg-surface-overlay-soft p-4"
-			onSubmit={handleSubmit(onSubmit)}
-		>
-			<input type="hidden" {...register("id")} />
-			<div className="grid gap-3 sm:grid-cols-[1fr_7rem_auto]">
-				<Field data-invalid={errors.name ? "true" : undefined}>
-					<FieldLabel htmlFor={`shopping-item-edit-name-${item.id}`}>
-						Item
-					</FieldLabel>
-					<FieldContent>
-						<Input
-							id={`shopping-item-edit-name-${item.id}`}
-							aria-invalid={errors.name ? "true" : "false"}
-							{...register("name")}
-						/>
-						<FieldError errors={[errors.name]} />
-					</FieldContent>
-				</Field>
-
-				<Field data-invalid={errors.quantity ? "true" : undefined}>
-					<FieldLabel htmlFor={`shopping-item-edit-quantity-${item.id}`}>
-						Qty
-					</FieldLabel>
-					<FieldContent>
-						<Input
-							id={`shopping-item-edit-quantity-${item.id}`}
-							min={1}
-							type="number"
-							aria-invalid={errors.quantity ? "true" : "false"}
-							{...register("quantity")}
-						/>
-						<FieldError errors={[errors.quantity]} />
-					</FieldContent>
-				</Field>
-
-				<div className="flex items-end gap-2">
-					<Button disabled={isSubmitting} size="sm" type="submit">
-						Save
-					</Button>
-					<Button onClick={onCancel} size="sm" type="button" variant="ghost">
-						Cancel
-					</Button>
-				</div>
-			</div>
-		</form>
-	);
-}
-
-function ShoppingListItem({
-	isDeleting,
-	isUpdating,
-	item,
-	onDelete,
-	onEdit,
-	onToggle,
-}: {
-	isDeleting: boolean;
-	isUpdating: boolean;
-	item: ShoppingItem;
-	onDelete: () => void;
-	onEdit: () => void;
-	onToggle: () => void;
-}) {
-	return (
-		<div className="flex flex-col gap-3 rounded-2xl border border-border-default bg-surface-overlay-soft p-4 sm:flex-row sm:items-center sm:justify-between">
-			<div>
-				<p
-					className={
-						item.completed
-							? "font-semibold text-text-caption line-through"
-							: "font-semibold text-text-heading"
-					}
-				>
-					{item.name}
-				</p>
-				<p className="mt-1 text-sm text-text-caption">Qty {item.quantity}</p>
-			</div>
-
-			<div className="flex flex-wrap gap-2">
-				<Button
-					disabled={isUpdating}
-					onClick={onToggle}
-					size="sm"
-					type="button"
-					variant={item.completed ? "secondary" : "outline"}
-				>
-					{item.completed ? "Mark pending" : "Mark done"}
-				</Button>
-				<Button onClick={onEdit} size="sm" type="button" variant="outline">
-					Edit
-				</Button>
-				<Button
-					disabled={isDeleting}
-					onClick={onDelete}
-					size="sm"
-					type="button"
-					variant="destructive"
-				>
-					Delete
-				</Button>
-			</div>
-		</div>
 	);
 }
