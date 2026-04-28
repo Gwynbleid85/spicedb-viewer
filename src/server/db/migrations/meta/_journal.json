@@ -8,6 +8,13 @@
 			"when": 1776958437553,
 			"tag": "0000_absurd_sway",
 			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "6",
+			"when": 1777356356146,
+			"tag": "0001_rich_bastion",
+			"breakpoints": true
 		}
 	]
 }

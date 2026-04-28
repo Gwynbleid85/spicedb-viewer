@@ -73,9 +73,31 @@ export const verification = sqliteTable(
 	(table) => [index("verification_identifier_idx").on(table.identifier)],
 );
 
+export const shoppingItem = sqliteTable(
+	"shopping_item",
+	{
+		id: text("id").primaryKey(),
+		userId: text("userId")
+			.notNull()
+			.references(() => user.id, { onDelete: "cascade" }),
+		name: text("name").notNull(),
+		quantity: integer("quantity").notNull().default(1),
+		completed: integer("completed", { mode: "boolean" })
+			.notNull()
+			.default(false),
+		createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
+		updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull(),
+	},
+	(table) => [
+		index("shopping_item_user_id_idx").on(table.userId),
+		index("shopping_item_user_completed_idx").on(table.userId, table.completed),
+	],
+);
+
 export const userRelations = relations(user, ({ many }) => ({
 	sessions: many(session),
 	accounts: many(account),
+	shoppingItems: many(shoppingItem),
 }));
 
 export const sessionRelations = relations(session, ({ one }) => ({
@@ -92,12 +114,21 @@ export const accountRelations = relations(account, ({ one }) => ({
 	}),
 }));
 
+export const shoppingItemRelations = relations(shoppingItem, ({ one }) => ({
+	user: one(user, {
+		fields: [shoppingItem.userId],
+		references: [user.id],
+	}),
+}));
+
 export const schema = {
 	user,
 	session,
 	account,
 	verification,
+	shoppingItem,
 	userRelations,
 	sessionRelations,
 	accountRelations,
+	shoppingItemRelations,
 };
