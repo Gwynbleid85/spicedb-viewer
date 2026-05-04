@@ -7,6 +7,7 @@ import {
 	MiniMap,
 	type Node,
 	type NodeProps,
+	Panel,
 	Position,
 	ReactFlow,
 	useEdgesState,
@@ -16,10 +17,11 @@ import "@xyflow/react/dist/style.css";
 import { graphlib, layout } from "@dagrejs/dagre";
 import { useQuery } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import { Button } from "#/components/ui/button";
+import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
 import type {
 	SpiceDbGraph,
@@ -33,6 +35,8 @@ import { getSpiceDbGraph } from "#/server/functions/spicedb.functions";
 type FlowNodeData = SpiceDbGraphNode & {
 	color: (typeof objectColorScale)[number];
 	onSelect: (node: SpiceDbGraphNode) => void;
+	searchActive: boolean;
+	searchMatched: boolean;
 };
 
 type FlowNode = Node<FlowNodeData>;
@@ -53,6 +57,8 @@ const nodeSizeByKind: Record<
 	wildcard: { width: 190, height: 66 },
 };
 const nodeCollisionGap = 32;
+const componentGap = 96;
+const maxLayoutRowWidth = 1200;
 
 const nodeColorByKind: Record<
 	SpiceDbGraphNode["kind"],
@@ -146,6 +152,69 @@ const objectColorScale = [
 const nodeTypes = {
 	spicedb: SpiceDbNode,
 };
+
+function normalizeSearchValue(value: string) {
+	return value
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, " ")
+		.trim();
+}
+
+function fuzzyIncludes(text: string, query: string) {
+	let queryIndex = 0;
+
+	for (const character of text) {
+		if (character === query[queryIndex]) {
+			queryIndex += 1;
+		}
+
+		if (queryIndex === query.length) {
+			return true;
+		}
+	}
+
+	return false;
+}
+
+function metadataSearchValues(value: unknown): string[] {
+	if (Array.isArray(value)) {
+		return value.flatMap(metadataSearchValues);
+	}
+
+	if (value && typeof value === "object") {
+		return Object.values(value).flatMap(metadataSearchValues);
+	}
+
+	return value == null ? [] : [String(value)];
+}
+
+export function matchesNodeSearch(node: SpiceDbGraphNode, query: string) {
+	const searchTerms = normalizeSearchValue(query).split(" ").filter(Boolean);
+
+	if (searchTerms.length === 0) {
+		return false;
+	}
+
+	const searchableText = normalizeSearchValue(
+		[
+			node.id,
+			node.kind,
+			node.label,
+			node.description,
+			...Object.entries(node.metadata).flatMap(([key, value]) => [
+				key,
+				...metadataSearchValues(value),
+			]),
+		]
+			.filter(Boolean)
+			.join(" "),
+	);
+
+	return searchTerms.every(
+		(term) =>
+			searchableText.includes(term) || fuzzyIncludes(searchableText, term),
+	);
+}
 
 function getObjectType(node: SpiceDbGraphNode) {
 	const objectType = node.metadata.objectType;
@@ -261,70 +330,274 @@ function positionNodesWithoutOverlap(
 	return positioned;
 }
 
-function layoutGraph(graph: SpiceDbGraph, onSelect: FlowNodeData["onSelect"]) {
-	const layoutDirection = graph.mode === "schema" ? "horizontal" : "vertical";
-	const objectColorIndex = createObjectColorIndex(graph.nodes);
-	const dagre = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-	dagre.setGraph({
-		rankdir: graph.mode === "schema" ? "LR" : "TB",
-		nodesep: 84,
-		ranksep: 132,
-		edgesep: 36,
-	});
-
-	for (const node of graph.nodes) {
-		const size = nodeSizeByKind[node.kind];
-		dagre.setNode(node.id, size);
-	}
+function createConnectedComponents(graph: SpiceDbGraph) {
+	const nodeIds = new Set(graph.nodes.map((node) => node.id));
+	const neighbors = new Map<string, Set<string>>(
+		graph.nodes.map((node) => [node.id, new Set<string>()]),
+	);
 
 	for (const edge of graph.edges) {
-		dagre.setEdge(edge.source, edge.target);
+		if (!(nodeIds.has(edge.source) && nodeIds.has(edge.target))) {
+			continue;
+		}
+
+		neighbors.get(edge.source)?.add(edge.target);
+		neighbors.get(edge.target)?.add(edge.source);
 	}
 
-	layout(dagre);
+	const seen = new Set<string>();
+	const components: string[][] = [];
 
-	const nodes: FlowNode[] = graph.nodes.map((node) => {
-		const size = nodeSizeByKind[node.kind];
-		const positioned = dagre.node(node.id) as
-			| { x: number; y: number }
-			| undefined;
+	for (const node of graph.nodes) {
+		if (seen.has(node.id)) {
+			continue;
+		}
+
+		const component: string[] = [];
+		const pending = [node.id];
+		seen.add(node.id);
+
+		while (pending.length > 0) {
+			const id = pending.pop();
+
+			if (!id) {
+				continue;
+			}
+
+			component.push(id);
+
+			for (const neighbor of neighbors.get(id) ?? []) {
+				if (!seen.has(neighbor)) {
+					seen.add(neighbor);
+					pending.push(neighbor);
+				}
+			}
+		}
+
+		components.push(component);
+	}
+
+	return components;
+}
+
+function getLayoutSortKey(node: SpiceDbGraphNode) {
+	if (node.kind === "object") {
+		return `${getObjectType(node)}:${getObjectId(node)}`;
+	}
+
+	return `${node.kind}:${node.label}`;
+}
+
+function sortComponentIds(
+	componentIds: string[],
+	graphNodeById: Map<string, SpiceDbGraphNode>,
+	graph: SpiceDbGraph,
+) {
+	const degreeById = new Map(componentIds.map((id) => [id, 0]));
+
+	for (const edge of graph.edges) {
+		if (degreeById.has(edge.source)) {
+			degreeById.set(edge.source, (degreeById.get(edge.source) ?? 0) + 1);
+		}
+
+		if (degreeById.has(edge.target)) {
+			degreeById.set(edge.target, (degreeById.get(edge.target) ?? 0) + 1);
+		}
+	}
+
+	return [...componentIds].sort((firstId, secondId) => {
+		const degreeDelta =
+			(degreeById.get(secondId) ?? 0) - (degreeById.get(firstId) ?? 0);
+
+		if (degreeDelta !== 0) {
+			return degreeDelta;
+		}
+
+		const firstNode = graphNodeById.get(firstId);
+		const secondNode = graphNodeById.get(secondId);
+
+		return getLayoutSortKey(
+			firstNode ??
+				({
+					id: firstId,
+					kind: "definition",
+					label: firstId,
+					metadata: {},
+				} satisfies SpiceDbGraphNode),
+		).localeCompare(
+			getLayoutSortKey(
+				secondNode ??
+					({
+						id: secondId,
+						kind: "definition",
+						label: secondId,
+						metadata: {},
+					} satisfies SpiceDbGraphNode),
+			),
+		);
+	});
+}
+
+function getNodeBounds(nodes: FlowNode[]) {
+	return nodes.reduce(
+		(bounds, node) => {
+			const width = Number(node.style?.width ?? 0);
+			const height = Number(node.style?.height ?? 0);
+
+			return {
+				maxX: Math.max(bounds.maxX, node.position.x + width),
+				maxY: Math.max(bounds.maxY, node.position.y + height),
+				minX: Math.min(bounds.minX, node.position.x),
+				minY: Math.min(bounds.minY, node.position.y),
+			};
+		},
+		{ maxX: -Infinity, maxY: -Infinity, minX: Infinity, minY: Infinity },
+	);
+}
+
+function packLayoutComponents(components: FlowNode[][]) {
+	let cursorX = 0;
+	let cursorY = 0;
+	let rowHeight = 0;
+
+	return components.flatMap((component) => {
+		const bounds = getNodeBounds(component);
+		const width = bounds.maxX - bounds.minX;
+		const height = bounds.maxY - bounds.minY;
+
+		if (cursorX > 0 && cursorX + width > maxLayoutRowWidth) {
+			cursorX = 0;
+			cursorY += rowHeight + componentGap;
+			rowHeight = 0;
+		}
+
+		const offsetX = cursorX - bounds.minX;
+		const offsetY = cursorY - bounds.minY;
+		cursorX += width + componentGap;
+		rowHeight = Math.max(rowHeight, height);
+
+		return component.map((node) => ({
+			...node,
+			position: {
+				x: node.position.x + offsetX,
+				y: node.position.y + offsetY,
+			},
+		}));
+	});
+}
+
+export function layoutGraph(
+	graph: SpiceDbGraph,
+	onSelect: FlowNodeData["onSelect"],
+	searchMatches = new Set<string>(),
+	searchActive = searchMatches.size > 0,
+) {
+	const layoutDirection = graph.mode === "schema" ? "horizontal" : "vertical";
+	const rankdir = graph.mode === "schema" ? "LR" : "TB";
+	const objectColorIndex = createObjectColorIndex(graph.nodes);
+	const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
+	const sourcePosition =
+		layoutDirection === "horizontal" ? Position.Right : Position.Bottom;
+	const targetPosition =
+		layoutDirection === "horizontal" ? Position.Left : Position.Top;
+
+	const components = createConnectedComponents(graph).map((componentIds) => {
+		const orderedComponentIds = sortComponentIds(
+			componentIds,
+			graphNodeById,
+			graph,
+		);
+		const componentIdSet = new Set(orderedComponentIds);
+		const dagre = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
+		dagre.setGraph({
+			acyclicer: "greedy",
+			edgesep: 48,
+			nodesep: 112,
+			ranker: "network-simplex",
+			rankdir,
+			ranksep: 168,
+		});
+
+		for (const id of orderedComponentIds) {
+			const node = graphNodeById.get(id);
+
+			if (!node) {
+				continue;
+			}
+
+			dagre.setNode(id, nodeSizeByKind[node.kind]);
+		}
+
+		for (const edge of graph.edges) {
+			if (componentIdSet.has(edge.source) && componentIdSet.has(edge.target)) {
+				dagre.setEdge(edge.source, edge.target, {
+					minlen: edge.kind === "relationship" ? 2 : 1,
+					weight: edge.kind === "relationship" ? 2 : 1,
+				});
+			}
+		}
+
+		layout(dagre);
+
+		const nodes: FlowNode[] = orderedComponentIds.flatMap((id) => {
+			const node = graphNodeById.get(id);
+
+			if (!node) {
+				return [];
+			}
+
+			const size = nodeSizeByKind[node.kind];
+			const positioned = dagre.node(id) as { x: number; y: number } | undefined;
+
+			return {
+				id: node.id,
+				type: "spicedb",
+				sourcePosition,
+				targetPosition,
+				position: {
+					x: (positioned?.x ?? 0) - size.width / 2,
+					y: (positioned?.y ?? 0) - size.height / 2,
+				},
+				style: {
+					height: size.height,
+					width: size.width,
+				},
+				data: {
+					...node,
+					color: getNodeColor(node, objectColorIndex),
+					onSelect,
+					searchActive,
+					searchMatched: searchMatches.has(node.id),
+				},
+			};
+		});
+
+		return positionNodesWithoutOverlap(nodes, layoutDirection);
+	});
+
+	const edges: FlowEdge[] = graph.edges.map((edge) => {
+		const edgeMatched =
+			searchMatches.has(edge.source) || searchMatches.has(edge.target);
 
 		return {
-			id: node.id,
-			type: "spicedb",
-			sourcePosition: Position.Right,
-			targetPosition: Position.Left,
-			position: {
-				x: (positioned?.x ?? 0) - size.width / 2,
-				y: (positioned?.y ?? 0) - size.height / 2,
+			id: edge.id,
+			source: edge.source,
+			target: edge.target,
+			label: edge.label,
+			type: "straight",
+			markerEnd: {
+				type: MarkerType.ArrowClosed,
 			},
-			style: {
-				height: size.height,
-				width: size.width,
-			},
-			data: {
-				...node,
-				color: getNodeColor(node, objectColorIndex),
-				onSelect,
-			},
+			data: edge,
+			className: cn(
+				"text-text-caption transition-opacity",
+				searchActive && !edgeMatched && "opacity-20",
+			),
 		};
 	});
 
-	const edges: FlowEdge[] = graph.edges.map((edge) => ({
-		id: edge.id,
-		source: edge.source,
-		target: edge.target,
-		label: edge.label,
-		type: "straight",
-		markerEnd: {
-			type: MarkerType.ArrowClosed,
-		},
-		data: edge,
-		className: "text-text-caption",
-	}));
-
 	return {
-		nodes: positionNodesWithoutOverlap(nodes, layoutDirection),
+		nodes: packLayoutComponents(components),
 		edges,
 	};
 }
@@ -344,6 +617,9 @@ function SpiceDbNode({ data, selected }: NodeProps<FlowNode>) {
 			className={cn(
 				"w-full cursor-grab rounded-3xl border px-4 py-3 text-left text-text-heading shadow-brand-sm backdrop-blur transition active:cursor-grabbing hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-focus-ring",
 				color.node,
+				data.searchActive && !data.searchMatched && "opacity-30",
+				data.searchMatched &&
+					"scale-105 ring-4 ring-focus-ring shadow-brand-glow",
 				selected && "ring-4 ring-focus-ring",
 			)}
 		>
@@ -397,13 +673,7 @@ function StatInline({ label, value }: { label: string; value?: number }) {
 
 function MetadataPanel({ selected }: { selected: SelectedGraphItem | null }) {
 	if (!selected) {
-		return (
-			<aside className="rounded-5xl border border-border-default bg-surface-overlay-soft p-5">
-				<p className="text-sm font-semibold text-text-caption">
-					Select a node to inspect its metadata.
-				</p>
-			</aside>
-		);
+		return;
 	}
 
 	if (selected.type === "edge") {
@@ -475,13 +745,23 @@ function MetadataPanel({ selected }: { selected: SelectedGraphItem | null }) {
 function GraphCanvas({
 	graph,
 	onSelect,
+	searchActive,
+	searchMatches,
 }: {
 	graph: SpiceDbGraph;
 	onSelect: (item: SelectedGraphItem) => void;
+	searchActive: boolean;
+	searchMatches: Set<string>;
 }) {
 	const flow = useMemo(
-		() => layoutGraph(graph, (node) => onSelect({ item: node, type: "node" })),
-		[graph, onSelect],
+		() =>
+			layoutGraph(
+				graph,
+				(node) => onSelect({ item: node, type: "node" }),
+				searchMatches,
+				searchActive,
+			),
+		[graph, onSelect, searchActive, searchMatches],
 	);
 
 	if (graph.nodes.length === 0) {
@@ -518,8 +798,16 @@ function DraggableGraph({
 	nodes: FlowNode[];
 	onSelect: (item: SelectedGraphItem) => void;
 }) {
-	const [nodes, , onNodesChange] = useNodesState(initialNodes);
-	const [edges, , onEdgesChange] = useEdgesState(initialEdges);
+	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
+	const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
+	const organizeGraph = useCallback(() => {
+		setNodes(initialNodes);
+		setEdges(initialEdges);
+	}, [initialEdges, initialNodes, setEdges, setNodes]);
+
+	useEffect(() => {
+		organizeGraph();
+	}, [organizeGraph]);
 
 	return (
 		<ReactFlow
@@ -538,6 +826,11 @@ function DraggableGraph({
 			onNodesChange={onNodesChange}
 			proOptions={{ hideAttribution: true }}
 		>
+			<Panel position="bottom-center">
+				<Button onClick={organizeGraph} type="button" variant="secondary">
+					Organize
+				</Button>
+			</Panel>
 			<Background />
 			<Controls />
 			<MiniMap pannable zoomable />
@@ -548,6 +841,7 @@ function DraggableGraph({
 export function SpiceDbVisualizerPage() {
 	const [mode, setMode] = useState<SpiceDbGraphMode>("schema");
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
+	const [searchQuery, setSearchQuery] = useState("");
 	const fetchGraph = useServerFn(getSpiceDbGraph);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
@@ -555,6 +849,19 @@ export function SpiceDbVisualizerPage() {
 		staleTime: 30_000,
 	});
 	const graph = graphQuery.data;
+	const normalizedSearchQuery = searchQuery.trim();
+	const searchMatches = useMemo(() => {
+		if (!graph || normalizedSearchQuery.length === 0) {
+			return new Set<string>();
+		}
+
+		return new Set(
+			graph.nodes
+				.filter((node) => matchesNodeSearch(node, normalizedSearchQuery))
+				.map((node) => node.id),
+		);
+	}, [graph, normalizedSearchQuery]);
+	const searchActive = normalizedSearchQuery.length > 0;
 
 	return (
 		<main className="relative h-dvh w-full overflow-hidden">
@@ -563,7 +870,12 @@ export function SpiceDbVisualizerPage() {
 				{graphQuery.isLoading ? (
 					<GraphSkeleton />
 				) : graph ? (
-					<GraphCanvas graph={graph} onSelect={setSelected} />
+					<GraphCanvas
+						graph={graph}
+						onSelect={setSelected}
+						searchActive={searchActive}
+						searchMatches={searchMatches}
+					/>
 				) : null}
 			</div>
 
@@ -578,6 +890,21 @@ export function SpiceDbVisualizerPage() {
 							<h1 className="mt-1 font-heading text-3xl font-bold text-text-heading">
 								Authorization graph
 							</h1>
+						</div>
+						<div className="flex min-w-64 flex-col gap-1">
+							<Input
+								aria-label="Search graph nodes"
+								className="min-h-10 rounded-2xl bg-surface-chip/500 py-2 text-sm shadow-brand-sm backdrop-blur-lg"
+								onChange={(event) => setSearchQuery(event.target.value)}
+								placeholder="Search in nodes..."
+								type="search"
+								value={searchQuery}
+							/>
+							{searchActive && graph ? (
+								<p className="px-1 text-xs font-semibold text-text-caption">
+									{searchMatches.size} of {graph.nodes.length} nodes matched
+								</p>
+							) : null}
 						</div>
 						<div className="flex flex-wrap items-center gap-2">
 							<Button
