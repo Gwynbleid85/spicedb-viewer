@@ -124,3 +124,29 @@ export async function getRelationshipGraph(
 		truncated,
 	});
 }
+
+export async function deleteAllRelationships() {
+	const client = getSpiceDbClient();
+	const reflection = await client.promises.reflectSchema(
+		v1.ReflectSchemaRequest.create({
+			optionalFilters: [],
+		}),
+	);
+	const resourceTypes = reflection.definitions.map(
+		(definition) => definition.name,
+	);
+
+	for (const resourceType of resourceTypes) {
+		await client.promises.deleteRelationships(
+			v1.DeleteRelationshipsRequest.create({
+				relationshipFilter: v1.RelationshipFilter.create({
+					resourceType,
+				}),
+			}),
+		);
+	}
+
+	return {
+		resourceTypeCount: resourceTypes.length,
+	};
+}

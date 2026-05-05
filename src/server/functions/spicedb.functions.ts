@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { getCurrentSession } from "#/server/auth/session";
 import {
+	deleteAllRelationships,
 	getRelationshipGraph,
 	getSchemaGraph,
 } from "#/server/repositories/spicedb.repository";
@@ -28,6 +29,22 @@ export const getSpiceDbGraph = createServerFn({ method: "GET" })
 			}
 
 			return getSchemaGraph();
+		} catch (error) {
+			throw new Error(normalizeSpiceDbError(error));
+		}
+	});
+
+export const deleteSpiceDbRelationships = createServerFn({ method: "POST" })
+	.inputValidator(z.object({}))
+	.handler(async () => {
+		const session = await getCurrentSession();
+
+		if (!session) {
+			throw new Error("You must be signed in to delete SpiceDB relationships.");
+		}
+
+		try {
+			return deleteAllRelationships();
 		} catch (error) {
 			throw new Error(normalizeSpiceDbError(error));
 		}

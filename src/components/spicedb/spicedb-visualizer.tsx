@@ -15,11 +15,24 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { graphlib, layout } from "@dagrejs/dagre";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
+import { Trash2Icon } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
+import {
+	AlertDialog,
+	AlertDialogAction,
+	AlertDialogCancel,
+	AlertDialogContent,
+	AlertDialogDescription,
+	AlertDialogFooter,
+	AlertDialogHeader,
+	AlertDialogMedia,
+	AlertDialogTitle,
+	AlertDialogTrigger,
+} from "#/components/ui/alert-dialog";
 import { Button } from "#/components/ui/button";
 import { Input } from "#/components/ui/input";
 import { Separator } from "#/components/ui/separator";
@@ -30,7 +43,10 @@ import type {
 	SpiceDbGraphNode,
 } from "#/lib/spicedb-graph";
 import { cn } from "#/lib/utils";
-import { getSpiceDbGraph } from "#/server/functions/spicedb.functions";
+import {
+	deleteSpiceDbRelationships,
+	getSpiceDbGraph,
+} from "#/server/functions/spicedb.functions";
 
 type FlowNodeData = SpiceDbGraphNode & {
 	color: (typeof objectColorScale)[number];
@@ -842,11 +858,26 @@ export function SpiceDbVisualizerPage() {
 	const [mode, setMode] = useState<SpiceDbGraphMode>("schema");
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
+	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const queryClient = useQueryClient();
 	const fetchGraph = useServerFn(getSpiceDbGraph);
+	const deleteRelationships = useServerFn(deleteSpiceDbRelationships);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
 		queryFn: () => fetchGraph({ data: { mode } }),
 		staleTime: 30_000,
+	});
+	const deleteRelationshipsMutation = useMutation({
+		mutationFn: () => deleteRelationships({ data: {} }),
+		onSuccess: async () => {
+			setDeleteDialogOpen(false);
+			setSelected(null);
+			await queryClient.invalidateQueries({
+				queryKey: ["spicedb-graph"],
+				refetchType: "all",
+			});
+			setMode("relationships");
+		},
 	});
 	const graph = graphQuery.data;
 	const normalizedSearchQuery = searchQuery.trim();
@@ -862,6 +893,11 @@ export function SpiceDbVisualizerPage() {
 		);
 	}, [graph, normalizedSearchQuery]);
 	const searchActive = normalizedSearchQuery.length > 0;
+	const relationshipCount = graph?.stats.relationshipCount ?? 0;
+	const deleteDescription =
+		graph?.mode === "relationships"
+			? `SpiceDB currently returned ${relationshipCount} relationships. This will permanently delete every relationship while leaving the schema intact.`
+			: "This will permanently delete every relationship in SpiceDB while leaving the schema intact.";
 
 	return (
 		<main className="relative h-dvh w-full overflow-hidden">
@@ -929,6 +965,52 @@ export function SpiceDbVisualizerPage() {
 							>
 								{graphQuery.isFetching ? "Refreshing..." : "Refresh"}
 							</Button>
+							<AlertDialog
+								onOpenChange={setDeleteDialogOpen}
+								open={deleteDialogOpen}
+							>
+								<AlertDialogTrigger
+									render={
+										<Button
+											disabled={deleteRelationshipsMutation.isPending}
+											variant="destructive"
+										>
+											<Trash2Icon data-icon="inline-start" />
+											Delete relations
+										</Button>
+									}
+								/>
+								<AlertDialogContent size="sm">
+									<AlertDialogHeader>
+										<AlertDialogMedia className="bg-destructive text-text-danger">
+											<Trash2Icon />
+										</AlertDialogMedia>
+										<AlertDialogTitle>
+											Delete all relationships?
+										</AlertDialogTitle>
+										<AlertDialogDescription>
+											{deleteDescription} This action cannot be undone.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
+									<AlertDialogFooter>
+										<AlertDialogCancel
+											disabled={deleteRelationshipsMutation.isPending}
+											variant="ghost"
+										>
+											Cancel
+										</AlertDialogCancel>
+										<AlertDialogAction
+											disabled={deleteRelationshipsMutation.isPending}
+											onClick={() => deleteRelationshipsMutation.mutate()}
+											variant="destructive"
+										>
+											{deleteRelationshipsMutation.isPending
+												? "Deleting..."
+												: "Delete relations"}
+										</AlertDialogAction>
+									</AlertDialogFooter>
+								</AlertDialogContent>
+							</AlertDialog>
 						</div>
 					</div>
 				</div>
@@ -937,6 +1019,15 @@ export function SpiceDbVisualizerPage() {
 					<Alert className="pointer-events-auto" variant="destructive">
 						<AlertTitle>Unable to load SpiceDB graph</AlertTitle>
 						<AlertDescription>{graphQuery.error.message}</AlertDescription>
+					</Alert>
+				) : null}
+
+				{deleteRelationshipsMutation.error ? (
+					<Alert className="pointer-events-auto" variant="destructive">
+						<AlertTitle>Unable to delete SpiceDB relationships</AlertTitle>
+						<AlertDescription>
+							{deleteRelationshipsMutation.error.message}
+						</AlertDescription>
 					</Alert>
 				) : null}
 
