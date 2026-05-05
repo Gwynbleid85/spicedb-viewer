@@ -125,6 +125,38 @@ export async function getRelationshipGraph(
 	});
 }
 
+export type DeleteRelationshipInput = {
+	resourceId: string;
+	resourceType: string;
+	relation: string;
+	subjectId: string;
+	subjectRelation?: string;
+	subjectType: string;
+};
+
+export async function deleteRelationship(input: DeleteRelationshipInput) {
+	const client = getSpiceDbClient();
+
+	await client.promises.deleteRelationships(
+		v1.DeleteRelationshipsRequest.create({
+			relationshipFilter: v1.RelationshipFilter.create({
+				optionalRelation: input.relation,
+				optionalResourceId: input.resourceId,
+				optionalSubjectFilter: v1.SubjectFilter.create({
+					optionalRelation: input.subjectRelation
+						? v1.SubjectFilter_RelationFilter.create({
+								relation: input.subjectRelation,
+							})
+						: undefined,
+					optionalSubjectId: input.subjectId,
+					subjectType: input.subjectType,
+				}),
+				resourceType: input.resourceType,
+			}),
+		}),
+	);
+}
+
 export async function deleteAllRelationships() {
 	const client = getSpiceDbClient();
 	const reflection = await client.promises.reflectSchema(

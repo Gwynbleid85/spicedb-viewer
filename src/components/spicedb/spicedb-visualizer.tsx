@@ -44,6 +44,7 @@ import type {
 } from "#/lib/spicedb-graph";
 import { cn } from "#/lib/utils";
 import {
+	deleteSpiceDbRelationship,
 	deleteSpiceDbRelationships,
 	getSpiceDbGraph,
 } from "#/server/functions/spicedb.functions";
@@ -60,6 +61,19 @@ type FlowEdge = Edge<SpiceDbGraphEdge>;
 type SelectedGraphItem =
 	| { item: SpiceDbGraphEdge; type: "edge" }
 	| { item: SpiceDbGraphNode; type: "node" };
+
+type DeleteRelationshipRequest = {
+	resourceId: string;
+	resourceType: string;
+	relation: string;
+	subjectId: string;
+	subjectRelation?: string;
+	subjectType: string;
+};
+
+type DeleteRelationshipMutationInput = DeleteRelationshipRequest & {
+	edgeId: string;
+};
 
 const nodeSizeByKind: Record<
 	SpiceDbGraphNode["kind"],
@@ -242,6 +256,48 @@ function getObjectId(node: SpiceDbGraphNode) {
 	const objectId = node.metadata.objectId;
 
 	return typeof objectId === "string" ? objectId : node.label;
+}
+
+function parseRelationshipEndpoint(value: unknown) {
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const [object, relation] = value.split("#", 2);
+	const separatorIndex = object?.indexOf(":") ?? -1;
+
+	if (!object || separatorIndex < 1) {
+		return null;
+	}
+
+	return {
+		id: object.slice(separatorIndex + 1),
+		relation,
+		type: object.slice(0, separatorIndex),
+	};
+}
+
+function relationshipDeleteRequest(edge: SpiceDbGraphEdge) {
+	if (edge.kind !== "relationship") {
+		return null;
+	}
+
+	const resource = parseRelationshipEndpoint(edge.metadata.resource);
+	const subject = parseRelationshipEndpoint(edge.metadata.subject);
+	const relation = edge.metadata.relation;
+
+	if (!resource || !subject || typeof relation !== "string") {
+		return null;
+	}
+
+	return {
+		resourceId: resource.id,
+		resourceType: resource.type,
+		relation,
+		subjectId: subject.id,
+		subjectRelation: subject.relation,
+		subjectType: subject.type,
+	} satisfies DeleteRelationshipRequest;
 }
 
 function createObjectColorIndex(nodes: SpiceDbGraphNode[]) {
@@ -687,21 +743,80 @@ function StatInline({ label, value }: { label: string; value?: number }) {
 	);
 }
 
-function MetadataPanel({ selected }: { selected: SelectedGraphItem | null }) {
+function MetadataPanel({
+	deletePending,
+	onDeleteRelationship,
+	selected,
+}: {
+	deletePending: boolean;
+	onDeleteRelationship: (input: DeleteRelationshipMutationInput) => void;
+	selected: SelectedGraphItem | null;
+}) {
 	if (!selected) {
 		return;
 	}
 
 	if (selected.type === "edge") {
+		const deleteRequest = relationshipDeleteRequest(selected.item);
+
 		return (
 			<aside className="rounded-5xl border border-border-default bg-surface-overlay-soft p-5">
-				<div>
-					<p className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
-						{selected.item.kind}
-					</p>
-					<h2 className="mt-1 font-heading text-2xl font-bold text-text-heading">
-						{selected.item.label}
-					</h2>
+				<div className="flex items-start justify-between gap-3">
+					<div>
+						<p className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
+							{selected.item.kind}
+						</p>
+						<h2 className="mt-1 font-heading text-2xl font-bold text-text-heading">
+							{selected.item.label}
+						</h2>
+					</div>
+					{deleteRequest ? (
+						<AlertDialog>
+							<AlertDialogTrigger
+								render={
+									<Button
+										disabled={deletePending}
+										size="icon-sm"
+										variant="destructive"
+									>
+										<Trash2Icon />
+										<span className="sr-only">Delete relationship</span>
+									</Button>
+								}
+							/>
+							<AlertDialogContent size="sm">
+								<AlertDialogHeader>
+									<AlertDialogMedia className="bg-destructive text-text-danger">
+										<Trash2Icon />
+									</AlertDialogMedia>
+									<AlertDialogTitle>Delete this relationship?</AlertDialogTitle>
+									<AlertDialogDescription>
+										This will permanently delete {selected.item.label} from{" "}
+										{String(selected.item.metadata.resource)} to{" "}
+										{String(selected.item.metadata.subject)}. This action cannot
+										be undone.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel disabled={deletePending} variant="ghost">
+										Cancel
+									</AlertDialogCancel>
+									<AlertDialogAction
+										disabled={deletePending}
+										onClick={() =>
+											onDeleteRelationship({
+												...deleteRequest,
+												edgeId: selected.item.id,
+											})
+										}
+										variant="destructive"
+									>
+										{deletePending ? "Deleting..." : "Delete"}
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
+					) : null}
 				</div>
 				<Separator className="my-4" />
 				<dl className="flex flex-col gap-3">
@@ -796,12 +911,7 @@ function GraphCanvas({
 	}
 
 	return (
-		<DraggableGraph
-			key={`${graph.mode}:${graph.readAt ?? "latest"}:${graph.nodes.length}:${graph.edges.length}`}
-			edges={flow.edges}
-			nodes={flow.nodes}
-			onSelect={onSelect}
-		/>
+		<DraggableGraph edges={flow.edges} nodes={flow.nodes} onSelect={onSelect} />
 	);
 }
 
@@ -822,8 +932,21 @@ function DraggableGraph({
 	}, [initialEdges, initialNodes, setEdges, setNodes]);
 
 	useEffect(() => {
-		organizeGraph();
-	}, [organizeGraph]);
+		setEdges(initialEdges);
+	}, [initialEdges, setEdges]);
+
+	useEffect(() => {
+		setNodes((currentNodes) => {
+			const currentNodeById = new Map(
+				currentNodes.map((node) => [node.id, node]),
+			);
+
+			return initialNodes.map((node) => ({
+				...node,
+				position: currentNodeById.get(node.id)?.position ?? node.position,
+			}));
+		});
+	}, [initialNodes, setNodes]);
 
 	return (
 		<ReactFlow
@@ -859,13 +982,30 @@ export function SpiceDbVisualizerPage() {
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [deletedRelationshipIds, setDeletedRelationshipIds] = useState(
+		() => new Set<string>(),
+	);
 	const queryClient = useQueryClient();
 	const fetchGraph = useServerFn(getSpiceDbGraph);
+	const deleteRelationship = useServerFn(deleteSpiceDbRelationship);
 	const deleteRelationships = useServerFn(deleteSpiceDbRelationships);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
 		queryFn: () => fetchGraph({ data: { mode } }),
 		staleTime: 30_000,
+	});
+	const deleteRelationshipMutation = useMutation({
+		mutationFn: ({
+			edgeId: _edgeId,
+			...data
+		}: DeleteRelationshipMutationInput) => deleteRelationship({ data }),
+		onSuccess: (_result, deletedRelationship) => {
+			setDeletedRelationshipIds(
+				(previous) => new Set([...previous, deletedRelationship.edgeId]),
+			);
+			setSelected(null);
+			setMode("relationships");
+		},
 	});
 	const deleteRelationshipsMutation = useMutation({
 		mutationFn: () => deleteRelationships({ data: {} }),
@@ -880,24 +1020,60 @@ export function SpiceDbVisualizerPage() {
 		},
 	});
 	const graph = graphQuery.data;
+	const displayedGraph = useMemo(() => {
+		if (!graph || deletedRelationshipIds.size === 0) {
+			return graph;
+		}
+
+		const edges = graph.edges.filter(
+			(edge) => !deletedRelationshipIds.has(edge.id),
+		);
+		const connectedNodeIds = new Set(
+			edges.flatMap((edge) => [edge.source, edge.target]),
+		);
+		const nodes = graph.nodes.filter((node) => connectedNodeIds.has(node.id));
+		const removedEdgeCount = graph.edges.length - edges.length;
+
+		return {
+			...graph,
+			edges,
+			nodes,
+			stats: {
+				...graph.stats,
+				edgeCount: Math.max(0, graph.stats.edgeCount - removedEdgeCount),
+				nodeCount: nodes.length,
+				relationshipCount:
+					graph.stats.relationshipCount === undefined
+						? undefined
+						: Math.max(0, graph.stats.relationshipCount - removedEdgeCount),
+			},
+		} satisfies SpiceDbGraph;
+	}, [deletedRelationshipIds, graph]);
 	const normalizedSearchQuery = searchQuery.trim();
 	const searchMatches = useMemo(() => {
-		if (!graph || normalizedSearchQuery.length === 0) {
+		if (!displayedGraph || normalizedSearchQuery.length === 0) {
 			return new Set<string>();
 		}
 
 		return new Set(
-			graph.nodes
+			displayedGraph.nodes
 				.filter((node) => matchesNodeSearch(node, normalizedSearchQuery))
 				.map((node) => node.id),
 		);
-	}, [graph, normalizedSearchQuery]);
+	}, [displayedGraph, normalizedSearchQuery]);
 	const searchActive = normalizedSearchQuery.length > 0;
-	const relationshipCount = graph?.stats.relationshipCount ?? 0;
+	const relationshipCount = displayedGraph?.stats.relationshipCount ?? 0;
 	const deleteDescription =
-		graph?.mode === "relationships"
+		displayedGraph?.mode === "relationships"
 			? `SpiceDB currently returned ${relationshipCount} relationships. This will permanently delete every relationship while leaving the schema intact.`
 			: "This will permanently delete every relationship in SpiceDB while leaving the schema intact.";
+
+	const graphUpdatedAt = graphQuery.dataUpdatedAt;
+
+	useEffect(() => {
+		void graphUpdatedAt;
+		setDeletedRelationshipIds(new Set());
+	}, [graphUpdatedAt]);
 
 	return (
 		<main className="relative h-dvh w-full overflow-hidden">
@@ -905,9 +1081,9 @@ export function SpiceDbVisualizerPage() {
 			<div className="absolute inset-0">
 				{graphQuery.isLoading ? (
 					<GraphSkeleton />
-				) : graph ? (
+				) : displayedGraph ? (
 					<GraphCanvas
-						graph={graph}
+						graph={displayedGraph}
 						onSelect={setSelected}
 						searchActive={searchActive}
 						searchMatches={searchMatches}
@@ -936,9 +1112,10 @@ export function SpiceDbVisualizerPage() {
 								type="search"
 								value={searchQuery}
 							/>
-							{searchActive && graph ? (
+							{searchActive && displayedGraph ? (
 								<p className="px-1 text-xs font-semibold text-text-caption">
-									{searchMatches.size} of {graph.nodes.length} nodes matched
+									{searchMatches.size} of {displayedGraph.nodes.length} nodes
+									matched
 								</p>
 							) : null}
 						</div>
@@ -1022,6 +1199,15 @@ export function SpiceDbVisualizerPage() {
 					</Alert>
 				) : null}
 
+				{deleteRelationshipMutation.error ? (
+					<Alert className="pointer-events-auto" variant="destructive">
+						<AlertTitle>Unable to delete SpiceDB relationship</AlertTitle>
+						<AlertDescription>
+							{deleteRelationshipMutation.error.message}
+						</AlertDescription>
+					</Alert>
+				) : null}
+
 				{deleteRelationshipsMutation.error ? (
 					<Alert className="pointer-events-auto" variant="destructive">
 						<AlertTitle>Unable to delete SpiceDB relationships</AlertTitle>
@@ -1031,32 +1217,35 @@ export function SpiceDbVisualizerPage() {
 					</Alert>
 				) : null}
 
-				{graph?.truncated && graph.message ? (
+				{displayedGraph?.truncated && displayedGraph.message ? (
 					<Alert className="pointer-events-auto">
 						<AlertTitle>Relationship graph is capped</AlertTitle>
-						<AlertDescription>{graph.message}</AlertDescription>
+						<AlertDescription>{displayedGraph.message}</AlertDescription>
 					</Alert>
 				) : null}
 			</div>
 
 			{/* Floating stats card */}
-			{graph ? (
+			{displayedGraph ? (
 				<div className="pointer-events-none absolute bottom-0 left-10 z-10 p-4">
 					<div className="pointer-events-auto flex items-center gap-4 rounded-2xl border border-border-chip bg-surface-chip/80 px-4 py-2.5 backdrop-blur-lg">
-						<StatInline label="Nodes" value={graph.stats.nodeCount} />
-						<StatInline label="Edges" value={graph.stats.edgeCount} />
+						<StatInline label="Nodes" value={displayedGraph.stats.nodeCount} />
+						<StatInline label="Edges" value={displayedGraph.stats.edgeCount} />
 						<StatInline
 							label="Definitions"
-							value={graph.stats.definitionCount}
+							value={displayedGraph.stats.definitionCount}
 						/>
-						<StatInline label="Relations" value={graph.stats.relationCount} />
+						<StatInline
+							label="Relations"
+							value={displayedGraph.stats.relationCount}
+						/>
 						<StatInline
 							label="Permissions"
-							value={graph.stats.permissionCount}
+							value={displayedGraph.stats.permissionCount}
 						/>
 						<StatInline
 							label="Relationships"
-							value={graph.stats.relationshipCount}
+							value={displayedGraph.stats.relationshipCount}
 						/>
 					</div>
 				</div>
@@ -1065,7 +1254,13 @@ export function SpiceDbVisualizerPage() {
 			{/* Floating metadata panel */}
 			<div className="pointer-events-none absolute top-24 right-0 bottom-0 z-10 w-80 p-4">
 				<div className="pointer-events-auto max-h-full overflow-y-auto">
-					<MetadataPanel selected={selected} />
+					<MetadataPanel
+						deletePending={deleteRelationshipMutation.isPending}
+						onDeleteRelationship={(input) =>
+							deleteRelationshipMutation.mutate(input)
+						}
+						selected={selected}
+					/>
 				</div>
 			</div>
 		</main>
