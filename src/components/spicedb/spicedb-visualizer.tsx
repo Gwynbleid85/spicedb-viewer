@@ -183,29 +183,6 @@ const nodeTypes = {
 	spicedb: SpiceDbNode,
 };
 
-function normalizeSearchValue(value: string) {
-	return value
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, " ")
-		.trim();
-}
-
-function fuzzyIncludes(text: string, query: string) {
-	let queryIndex = 0;
-
-	for (const character of text) {
-		if (character === query[queryIndex]) {
-			queryIndex += 1;
-		}
-
-		if (queryIndex === query.length) {
-			return true;
-		}
-	}
-
-	return false;
-}
-
 function metadataSearchValues(value: unknown): string[] {
 	if (Array.isArray(value)) {
 		return value.flatMap(metadataSearchValues);
@@ -219,31 +196,27 @@ function metadataSearchValues(value: unknown): string[] {
 }
 
 export function matchesNodeSearch(node: SpiceDbGraphNode, query: string) {
-	const searchTerms = normalizeSearchValue(query).split(" ").filter(Boolean);
+	const searchTerm = query.trim().toLowerCase();
 
-	if (searchTerms.length === 0) {
+	if (searchTerm.length === 0) {
 		return false;
 	}
 
-	const searchableText = normalizeSearchValue(
-		[
-			node.id,
-			node.kind,
-			node.label,
-			node.description,
-			...Object.entries(node.metadata).flatMap(([key, value]) => [
-				key,
-				...metadataSearchValues(value),
-			]),
-		]
-			.filter(Boolean)
-			.join(" "),
-	);
+	const searchableText = [
+		node.id,
+		node.kind,
+		node.label,
+		node.description,
+		...Object.entries(node.metadata).flatMap(([key, value]) => [
+			key,
+			...metadataSearchValues(value),
+		]),
+	]
+		.filter(Boolean)
+		.join(" ")
+		.toLowerCase();
 
-	return searchTerms.every(
-		(term) =>
-			searchableText.includes(term) || fuzzyIncludes(searchableText, term),
-	);
+	return searchableText.includes(searchTerm);
 }
 
 function getObjectType(node: SpiceDbGraphNode) {

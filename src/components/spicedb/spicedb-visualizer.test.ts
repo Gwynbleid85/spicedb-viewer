@@ -19,19 +19,47 @@ function createRelationshipNode(index: number) {
 }
 
 describe("matchesNodeSearch", () => {
-	it("matches node metadata with fuzzy terms", () => {
+	it("matches direct substrings in node metadata", () => {
 		expect(
 			matchesNodeSearch(
 				{
 					...createRelationshipNode(1),
 					metadata: {
-						objectId: "tom-document",
+						objectId: "asdf-test-asdf",
 						objectType: "document",
 					},
 				},
-				"tdoc",
+				"test",
 			),
 		).toBe(true);
+	});
+
+	it("does not fuzzy match non-contiguous characters", () => {
+		expect(
+			matchesNodeSearch(
+				{
+					...createRelationshipNode(1),
+					metadata: {
+						objectId: "t-e-s-t",
+						objectType: "document",
+					},
+				},
+				"test",
+			),
+		).toBe(false);
+	});
+
+	it("keeps separators significant for multi-part searches", () => {
+		expect(
+			matchesNodeSearch(
+				{
+					...createRelationshipNode(1),
+					label:
+						"broker:test-tenant-k-six-a_019d2a01-a009-7009-8009-a00000000009",
+				},
+				"test-tenant-a",
+			),
+		).toBe(false);
 	});
 
 	it("requires every search term to match", () => {
