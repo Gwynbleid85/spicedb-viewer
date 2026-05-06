@@ -16,6 +16,7 @@ Open `http://localhost:3010`.
 ```bash
 SPICEDB_ENDPOINT=localhost:50051
 SPICEDB_TOKEN=your-token
+SPICEDB_PROTOCOL=grpc # or rest
 SPICEDB_SECURITY=insecure-localhost # or secure
 SPICEDB_RELATIONSHIP_EXPORT_LIMIT=1000
 ```
