@@ -34,6 +34,8 @@ The intended authoring surface is:
   - `--shadow-brand-header`
   - `--shadow-brand-hero`
   - `--shadow-brand-glow`
+- Data visualization:
+  - `--chart-{1,2,3,4,5,6,7,8,9,10}`
 
 The most commonly reused semantic tokens exported for Tailwind utilities are:
 
