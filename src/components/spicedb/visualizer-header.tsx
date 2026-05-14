@@ -26,12 +26,17 @@ export function VisualizerHeader({
 	mode,
 	onDeleteAllRelationships,
 	onDeleteDialogOpenChange,
+	onDeleteSelectedRelationships,
 	onModeChange,
 	onRefresh,
 	onSearchQueryChange,
+	onSelectedRelationshipsDeleteDialogOpenChange,
 	searchActive,
 	searchMatches,
 	searchQuery,
+	selectedRelationshipCount,
+	selectedRelationshipsDeleteDialogOpen,
+	selectedRelationshipsDeletePending,
 }: {
 	deleteDescription: string;
 	deleteDialogOpen: boolean;
@@ -41,23 +46,35 @@ export function VisualizerHeader({
 	mode: SpiceDbGraphMode;
 	onDeleteAllRelationships: () => void;
 	onDeleteDialogOpenChange: (open: boolean) => void;
+	onDeleteSelectedRelationships: () => void;
 	onModeChange: (mode: SpiceDbGraphMode) => void;
 	onRefresh: () => void;
 	onSearchQueryChange: (query: string) => void;
+	onSelectedRelationshipsDeleteDialogOpenChange: (open: boolean) => void;
 	searchActive: boolean;
 	searchMatches: Set<string>;
 	searchQuery: string;
+	selectedRelationshipCount: number;
+	selectedRelationshipsDeleteDialogOpen: boolean;
+	selectedRelationshipsDeletePending: boolean;
 }) {
 	return (
 		<div className="pointer-events-auto flex flex-col gap-0 py-0">
 			<div className="flex flex-wrap items-center justify-between gap-4 px-6 py-4">
-				<div>
-					<p className="text-xs font-bold uppercase tracking-[0.24em] text-text-kicker">
-						SpiceDB
-					</p>
-					<h1 className="mt-1 font-heading text-3xl font-bold text-text-heading">
-						Authorization graph
-					</h1>
+				<div className="flex items-center gap-4">
+					<img
+						alt="SpiceDB Viewer logo"
+						className="h-16 w-16 rounded-2xl shadow-brand-sm"
+						src="/logo-rounded.png"
+					/>
+					<div>
+						<p className="text-xs font-bold uppercase tracking-[0.24em] text-text-kicker">
+							SpiceDB
+						</p>
+						<h1 className="mt-1 font-heading text-3xl font-bold text-text-heading">
+							Authorization graph
+						</h1>
+					</div>
 				</div>
 				<div className="flex min-w-64 flex-col gap-1">
 					<Input
@@ -99,6 +116,56 @@ export function VisualizerHeader({
 					>
 						{isFetching ? "Refreshing..." : "Refresh"}
 					</Button>
+					{selectedRelationshipCount > 1 ? (
+						<AlertDialog
+							onOpenChange={onSelectedRelationshipsDeleteDialogOpenChange}
+							open={selectedRelationshipsDeleteDialogOpen}
+						>
+							<AlertDialogTrigger
+								render={
+									<Button
+										disabled={selectedRelationshipsDeletePending}
+										variant="destructive"
+									>
+										<Trash2Icon data-icon="inline-start" />
+										Delete {selectedRelationshipCount} selected
+									</Button>
+								}
+							/>
+							<AlertDialogContent size="sm">
+								<AlertDialogHeader>
+									<AlertDialogMedia className="bg-destructive text-text-danger">
+										<Trash2Icon />
+									</AlertDialogMedia>
+									<AlertDialogTitle>
+										Delete selected relationships?
+									</AlertDialogTitle>
+									<AlertDialogDescription>
+										This will permanently delete {selectedRelationshipCount}{" "}
+										selected relationships from SpiceDB. This action cannot be
+										undone.
+									</AlertDialogDescription>
+								</AlertDialogHeader>
+								<AlertDialogFooter>
+									<AlertDialogCancel
+										disabled={selectedRelationshipsDeletePending}
+										variant="ghost"
+									>
+										Cancel
+									</AlertDialogCancel>
+									<AlertDialogAction
+										disabled={selectedRelationshipsDeletePending}
+										onClick={onDeleteSelectedRelationships}
+										variant="destructive"
+									>
+										{selectedRelationshipsDeletePending
+											? "Deleting..."
+											: "Delete"}
+									</AlertDialogAction>
+								</AlertDialogFooter>
+							</AlertDialogContent>
+						</AlertDialog>
+					) : null}
 					<AlertDialog
 						onOpenChange={onDeleteDialogOpenChange}
 						open={deleteDialogOpen}

@@ -23,6 +23,10 @@ const deleteRelationshipInputSchema = z.object({
 	subjectType: z.string().min(1),
 });
 
+const deleteSelectedRelationshipsInputSchema = z.object({
+	relationships: z.array(deleteRelationshipInputSchema).min(1).max(100),
+});
+
 export const getSpiceDbGraph = createServerFn({ method: "GET" })
 	.inputValidator(spiceDbGraphInputSchema)
 	.handler(async ({ data }) => {
@@ -43,6 +47,22 @@ export const deleteSpiceDbRelationship = createServerFn({ method: "POST" })
 		try {
 			await deleteRelationship(data);
 			return { deleted: true };
+		} catch (error) {
+			throw new Error(normalizeSpiceDbError(error));
+		}
+	});
+
+export const deleteSpiceDbSelectedRelationships = createServerFn({
+	method: "POST",
+})
+	.inputValidator(deleteSelectedRelationshipsInputSchema)
+	.handler(async ({ data }) => {
+		try {
+			for (const relationship of data.relationships) {
+				await deleteRelationship(relationship);
+			}
+
+			return { deletedCount: data.relationships.length };
 		} catch (error) {
 			throw new Error(normalizeSpiceDbError(error));
 		}

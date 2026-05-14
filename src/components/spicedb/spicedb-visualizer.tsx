@@ -4,16 +4,24 @@ import { useServerFn } from "@tanstack/react-start";
 import { useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
-import type { SpiceDbGraph, SpiceDbGraphMode } from "#/lib/spicedb-graph";
+import type {
+	SpiceDbGraph,
+	SpiceDbGraphEdge,
+	SpiceDbGraphMode,
+} from "#/lib/spicedb-graph";
 import {
 	deleteSpiceDbRelationship,
 	deleteSpiceDbRelationships,
+	deleteSpiceDbSelectedRelationships,
 	getSpiceDbGraph,
 } from "#/server/functions/spicedb.functions";
 
 import { GraphCanvas, GraphSkeleton } from "./graph-canvas";
 import { MetadataPanel } from "./metadata-panel";
-import { matchesNodeSearch } from "./spicedb-graph-node-utils";
+import {
+	matchesNodeSearch,
+	relationshipDeleteRequest,
+} from "./spicedb-graph-node-utils";
 import type {
 	DeleteRelationshipMutationInput,
 	SelectedGraphItem,
@@ -27,8 +35,15 @@ export { matchesNodeSearch } from "./spicedb-graph-node-utils";
 export function SpiceDbVisualizerPage() {
 	const [mode, setMode] = useState<SpiceDbGraphMode>("schema");
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
+	const [selectedRelationships, setSelectedRelationships] = useState<
+		SpiceDbGraphEdge[]
+	>([]);
 	const [searchQuery, setSearchQuery] = useState("");
 	const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+	const [
+		selectedRelationshipsDeleteDialogOpen,
+		setSelectedRelationshipsDeleteDialogOpen,
+	] = useState(false);
 	const [deletedRelationshipIds, setDeletedRelationshipIds] = useState(
 		() => new Set<string>(),
 	);
@@ -36,6 +51,9 @@ export function SpiceDbVisualizerPage() {
 	const fetchGraph = useServerFn(getSpiceDbGraph);
 	const deleteRelationship = useServerFn(deleteSpiceDbRelationship);
 	const deleteRelationships = useServerFn(deleteSpiceDbRelationships);
+	const deleteSelectedRelationships = useServerFn(
+		deleteSpiceDbSelectedRelationships,
+	);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
 		queryFn: () => fetchGraph({ data: { mode } }),
@@ -54,11 +72,35 @@ export function SpiceDbVisualizerPage() {
 			setMode("relationships");
 		},
 	});
+	const deleteSelectedRelationshipsMutation = useMutation({
+		mutationFn: (relationships: DeleteRelationshipMutationInput[]) =>
+			deleteSelectedRelationships({
+				data: {
+					relationships: relationships.map(
+						({ edgeId: _edgeId, ...input }) => input,
+					),
+				},
+			}),
+		onSuccess: (_result, relationships) => {
+			setDeletedRelationshipIds(
+				(previous) =>
+					new Set([
+						...previous,
+						...relationships.map((relationship) => relationship.edgeId),
+					]),
+			);
+			setSelected(null);
+			setSelectedRelationships([]);
+			setSelectedRelationshipsDeleteDialogOpen(false);
+			setMode("relationships");
+		},
+	});
 	const deleteRelationshipsMutation = useMutation({
 		mutationFn: () => deleteRelationships({ data: {} }),
 		onSuccess: async () => {
 			setDeleteDialogOpen(false);
 			setSelected(null);
+			setSelectedRelationships([]);
 			await queryClient.invalidateQueries({
 				queryKey: ["spicedb-graph"],
 				refetchType: "all",
@@ -81,6 +123,18 @@ export function SpiceDbVisualizerPage() {
 		);
 	}, [displayedGraph, normalizedSearchQuery]);
 	const searchActive = normalizedSearchQuery.length > 0;
+	const selectedRelationshipDeleteRequests = useMemo(
+		() =>
+			selectedRelationships.flatMap((relationship) => {
+				const deleteRequest = relationshipDeleteRequest(relationship);
+
+				return deleteRequest
+					? [{ ...deleteRequest, edgeId: relationship.id }]
+					: [];
+			}),
+		[selectedRelationships],
+	);
+	const selectedRelationshipCount = selectedRelationshipDeleteRequests.length;
 	const relationshipCount = displayedGraph?.stats.relationshipCount ?? 0;
 	const deleteDescription =
 		displayedGraph?.mode === "relationships"
@@ -92,6 +146,7 @@ export function SpiceDbVisualizerPage() {
 	useEffect(() => {
 		void graphUpdatedAt;
 		setDeletedRelationshipIds(new Set());
+		setSelectedRelationships([]);
 	}, [graphUpdatedAt]);
 
 	return (
@@ -103,6 +158,7 @@ export function SpiceDbVisualizerPage() {
 					<GraphCanvas
 						graph={displayedGraph}
 						onSelect={setSelected}
+						onSelectedRelationshipsChange={setSelectedRelationships}
 						searchActive={searchActive}
 						searchMatches={searchMatches}
 					/>
@@ -119,17 +175,35 @@ export function SpiceDbVisualizerPage() {
 					mode={mode}
 					onDeleteAllRelationships={() => deleteRelationshipsMutation.mutate()}
 					onDeleteDialogOpenChange={setDeleteDialogOpen}
+					onDeleteSelectedRelationships={() =>
+						deleteSelectedRelationshipsMutation.mutate(
+							selectedRelationshipDeleteRequests,
+						)
+					}
 					onModeChange={setMode}
 					onRefresh={() => graphQuery.refetch()}
 					onSearchQueryChange={setSearchQuery}
+					onSelectedRelationshipsDeleteDialogOpenChange={
+						setSelectedRelationshipsDeleteDialogOpen
+					}
 					searchActive={searchActive}
 					searchMatches={searchMatches}
 					searchQuery={searchQuery}
+					selectedRelationshipCount={selectedRelationshipCount}
+					selectedRelationshipsDeleteDialogOpen={
+						selectedRelationshipsDeleteDialogOpen
+					}
+					selectedRelationshipsDeletePending={
+						deleteSelectedRelationshipsMutation.isPending
+					}
 				/>
 
 				<GraphAlerts
 					deleteRelationshipError={deleteRelationshipMutation.error}
 					deleteRelationshipsError={deleteRelationshipsMutation.error}
+					deleteSelectedRelationshipsError={
+						deleteSelectedRelationshipsMutation.error
+					}
 					displayedGraph={displayedGraph}
 					graphError={graphQuery.error}
 				/>
@@ -190,11 +264,13 @@ function useDisplayedGraph(
 function GraphAlerts({
 	deleteRelationshipError,
 	deleteRelationshipsError,
+	deleteSelectedRelationshipsError,
 	displayedGraph,
 	graphError,
 }: {
 	deleteRelationshipError: Error | null;
 	deleteRelationshipsError: Error | null;
+	deleteSelectedRelationshipsError: Error | null;
 	displayedGraph?: SpiceDbGraph;
 	graphError: Error | null;
 }) {
@@ -219,6 +295,15 @@ function GraphAlerts({
 					<AlertTitle>Unable to delete SpiceDB relationships</AlertTitle>
 					<AlertDescription>
 						{deleteRelationshipsError.message}
+					</AlertDescription>
+				</Alert>
+			) : null}
+
+			{deleteSelectedRelationshipsError ? (
+				<Alert className="pointer-events-auto" variant="destructive">
+					<AlertTitle>Unable to delete selected relationships</AlertTitle>
+					<AlertDescription>
+						{deleteSelectedRelationshipsError.message}
 					</AlertDescription>
 				</Alert>
 			) : null}

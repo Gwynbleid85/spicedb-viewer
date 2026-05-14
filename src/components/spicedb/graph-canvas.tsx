@@ -11,7 +11,7 @@ import { useCallback, useEffect, useMemo } from "react";
 
 import { useTheme } from "#/components/theme/theme-provider";
 import { Button } from "#/components/ui/button";
-import type { SpiceDbGraph } from "#/lib/spicedb-graph";
+import type { SpiceDbGraph, SpiceDbGraphEdge } from "#/lib/spicedb-graph";
 
 import { layoutGraph } from "./spicedb-graph-layout";
 import { SpiceDbNode } from "./spicedb-node";
@@ -39,11 +39,13 @@ export function GraphSkeleton() {
 export function GraphCanvas({
 	graph,
 	onSelect,
+	onSelectedRelationshipsChange,
 	searchActive,
 	searchMatches,
 }: {
 	graph: SpiceDbGraph;
 	onSelect: (item: SelectedGraphItem) => void;
+	onSelectedRelationshipsChange: (relationships: SpiceDbGraphEdge[]) => void;
 	searchActive: boolean;
 	searchMatches: Set<string>;
 }) {
@@ -74,7 +76,12 @@ export function GraphCanvas({
 	}
 
 	return (
-		<DraggableGraph edges={flow.edges} nodes={flow.nodes} onSelect={onSelect} />
+		<DraggableGraph
+			edges={flow.edges}
+			nodes={flow.nodes}
+			onSelect={onSelect}
+			onSelectedRelationshipsChange={onSelectedRelationshipsChange}
+		/>
 	);
 }
 
@@ -82,10 +89,12 @@ function DraggableGraph({
 	edges: initialEdges,
 	nodes: initialNodes,
 	onSelect,
+	onSelectedRelationshipsChange,
 }: {
 	edges: FlowEdge[];
 	nodes: FlowNode[];
 	onSelect: (item: SelectedGraphItem) => void;
+	onSelectedRelationshipsChange: (relationships: SpiceDbGraphEdge[]) => void;
 }) {
 	const { theme } = useTheme();
 	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
@@ -94,6 +103,16 @@ function DraggableGraph({
 		setNodes(initialNodes);
 		setEdges(initialEdges);
 	}, [initialEdges, initialNodes, setEdges, setNodes]);
+	const handleSelectionChange = useCallback(
+		({ edges: selectedEdges }: { edges: FlowEdge[] }) => {
+			onSelectedRelationshipsChange(
+				selectedEdges.flatMap((edge) =>
+					edge.data?.kind === "relationship" ? [edge.data] : [],
+				),
+			);
+		},
+		[onSelectedRelationshipsChange],
+	);
 
 	useEffect(() => {
 		setEdges(initialEdges);
@@ -126,6 +145,7 @@ function DraggableGraph({
 				}
 			}}
 			onEdgesChange={onEdgesChange}
+			onSelectionChange={handleSelectionChange}
 			onNodesChange={onNodesChange}
 			proOptions={{ hideAttribution: true }}
 		>
