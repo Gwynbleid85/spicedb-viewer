@@ -17,7 +17,6 @@
   "dependencies": {
     "@authzed/authzed-node": "^1.6.1",
     "@base-ui/react": "^1.4.1",
-    "@dagrejs/dagre": "^3.0.0",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "latest",
     "@tanstack/react-router": "latest",
@@ -27,6 +26,7 @@
     "@xyflow/react": "^12.10.2",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "d3-force": "^3.0.0",
     "lucide-react": "^1.9.0",
     "nitro": "npm:nitro-nightly@latest",
     "react": "^19.2.0",
@@ -40,6 +40,7 @@
   "devDependencies": {
     "@biomejs/biome": "2.4.5",
     "@tailwindcss/typography": "^0.5.16",
+    "@types/d3-force": "^3.0.10",
     "@types/node": "^22.10.2",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

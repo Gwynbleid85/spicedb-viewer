@@ -1,7 +1,20 @@
-import { graphlib, layout } from "@dagrejs/dagre";
 import { MarkerType, Position } from "@xyflow/react";
+import {
+	forceCollide,
+	forceLink,
+	forceManyBody,
+	forceSimulation,
+	forceX,
+	forceY,
+	type SimulationLinkDatum,
+	type SimulationNodeDatum,
+} from "d3-force";
 
-import type { SpiceDbGraph, SpiceDbGraphNode } from "#/lib/spicedb-graph";
+import type {
+	SpiceDbGraph,
+	SpiceDbGraphEdge,
+	SpiceDbGraphNode,
+} from "#/lib/spicedb-graph";
 import { cn } from "#/lib/utils";
 import { getObjectId, getObjectType } from "./spicedb-graph-node-utils";
 import {
@@ -241,6 +254,478 @@ function getNodeBounds(nodes: FlowNode[]) {
 	);
 }
 
+type ForceLayoutNode = SimulationNodeDatum & {
+	id: string;
+	graphNode: SpiceDbGraphNode;
+	height: number;
+	targetX: number;
+	targetY: number;
+	width: number;
+};
+
+type ForceLayoutLink = SimulationLinkDatum<ForceLayoutNode> & {
+	kind: SpiceDbGraphEdge["kind"];
+	source: string;
+	target: string;
+};
+
+type ForceLayoutTargets = Map<string, { x: number; y: number }>;
+
+const schemaRankSpacing = 300;
+const schemaNodeSpacing = 130;
+const relationshipGroupSpacing = 180;
+const relationshipNodeSpacing = 260;
+const relationshipGroupColumns = 4;
+const forceTickCount = 300;
+const crossingReductionPasses = 8;
+
+function createPositionIndex(layers: string[][]) {
+	const positionById = new Map<string, number>();
+
+	layers.forEach((ids) => {
+		ids.forEach((id, index) => {
+			positionById.set(id, index);
+		});
+	});
+
+	return positionById;
+}
+
+function getAverageNeighborPosition(
+	id: string,
+	neighborById: Map<string, string[]>,
+	positionById: Map<string, number>,
+) {
+	const positions = (neighborById.get(id) ?? []).flatMap((neighborId) => {
+		const position = positionById.get(neighborId);
+		return position === undefined ? [] : [position];
+	});
+
+	if (positions.length === 0) {
+		return undefined;
+	}
+
+	return (
+		positions.reduce((total, position) => total + position, 0) /
+		positions.length
+	);
+}
+
+function sortLayerByNeighborPosition(
+	ids: string[],
+	neighborById: Map<string, string[]>,
+	positionById: Map<string, number>,
+	originalIndexById: Map<string, number>,
+) {
+	return [...ids].sort((firstId, secondId) => {
+		const firstAverage = getAverageNeighborPosition(
+			firstId,
+			neighborById,
+			positionById,
+		);
+		const secondAverage = getAverageNeighborPosition(
+			secondId,
+			neighborById,
+			positionById,
+		);
+
+		if (firstAverage !== undefined && secondAverage !== undefined) {
+			const averageDelta = firstAverage - secondAverage;
+
+			if (averageDelta !== 0) {
+				return averageDelta;
+			}
+		}
+
+		if (firstAverage !== undefined) {
+			return -1;
+		}
+
+		if (secondAverage !== undefined) {
+			return 1;
+		}
+
+		return (
+			(originalIndexById.get(firstId) ?? 0) -
+			(originalIndexById.get(secondId) ?? 0)
+		);
+	});
+}
+
+function reduceDirectedLayerCrossings(
+	layers: string[][],
+	componentEdges: SpiceDbGraphEdge[],
+	originalIndexById: Map<string, number>,
+) {
+	const incomingById = new Map<string, string[]>();
+	const outgoingById = new Map<string, string[]>();
+
+	for (const edge of componentEdges) {
+		incomingById.set(edge.target, [
+			...(incomingById.get(edge.target) ?? []),
+			edge.source,
+		]);
+		outgoingById.set(edge.source, [
+			...(outgoingById.get(edge.source) ?? []),
+			edge.target,
+		]);
+	}
+
+	const orderedLayers = layers.map((ids) => [...ids]);
+
+	for (let pass = 0; pass < crossingReductionPasses; pass += 1) {
+		let positionById = createPositionIndex(orderedLayers);
+
+		for (
+			let layerIndex = 1;
+			layerIndex < orderedLayers.length;
+			layerIndex += 1
+		) {
+			orderedLayers[layerIndex] = sortLayerByNeighborPosition(
+				orderedLayers[layerIndex] ?? [],
+				incomingById,
+				positionById,
+				originalIndexById,
+			);
+			positionById = createPositionIndex(orderedLayers);
+		}
+
+		for (
+			let layerIndex = orderedLayers.length - 2;
+			layerIndex >= 0;
+			layerIndex -= 1
+		) {
+			orderedLayers[layerIndex] = sortLayerByNeighborPosition(
+				orderedLayers[layerIndex] ?? [],
+				outgoingById,
+				positionById,
+				originalIndexById,
+			);
+			positionById = createPositionIndex(orderedLayers);
+		}
+	}
+
+	return orderedLayers;
+}
+
+function createSchemaForceLayoutTargets(
+	orderedComponentIds: string[],
+	componentEdges: SpiceDbGraphEdge[],
+) {
+	const componentIdSet = new Set(orderedComponentIds);
+	const indegreeById = new Map(orderedComponentIds.map((id) => [id, 0]));
+	const outgoingById = new Map(
+		orderedComponentIds.map((id) => [id, [] as string[]]),
+	);
+
+	for (const edge of componentEdges) {
+		if (!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))) {
+			continue;
+		}
+
+		outgoingById.get(edge.source)?.push(edge.target);
+		indegreeById.set(edge.target, (indegreeById.get(edge.target) ?? 0) + 1);
+	}
+
+	for (const targets of outgoingById.values()) {
+		targets.sort(
+			(first, second) =>
+				orderedComponentIds.indexOf(first) -
+				orderedComponentIds.indexOf(second),
+		);
+	}
+
+	const depthById = new Map<string, number>();
+	const queue = orderedComponentIds.filter((id) => indegreeById.get(id) === 0);
+
+	for (const id of queue) {
+		depthById.set(id, 0);
+	}
+
+	while (queue.length > 0) {
+		const id = queue.shift();
+
+		if (!id) {
+			continue;
+		}
+
+		const nextDepth = (depthById.get(id) ?? 0) + 1;
+
+		for (const target of outgoingById.get(id) ?? []) {
+			if (nextDepth > (depthById.get(target) ?? -1)) {
+				depthById.set(target, nextDepth);
+				queue.push(target);
+			}
+		}
+	}
+
+	let fallbackDepth = Math.max(0, ...depthById.values());
+
+	for (const id of orderedComponentIds) {
+		if (!depthById.has(id)) {
+			depthById.set(id, fallbackDepth);
+			fallbackDepth += 1;
+		}
+	}
+
+	const idsByDepth = new Map<number, string[]>();
+
+	for (const id of orderedComponentIds) {
+		const depth = depthById.get(id) ?? 0;
+		idsByDepth.set(depth, [...(idsByDepth.get(depth) ?? []), id]);
+	}
+
+	const originalIndexById = new Map(
+		orderedComponentIds.map((id, index) => [id, index]),
+	);
+	const depths = Array.from(idsByDepth.keys()).sort(
+		(first, second) => first - second,
+	);
+	const layers = depths.map((depth) => idsByDepth.get(depth) ?? []);
+	const orderedLayers = reduceDirectedLayerCrossings(
+		layers,
+		componentEdges,
+		originalIndexById,
+	);
+	const targets: ForceLayoutTargets = new Map();
+
+	orderedLayers.forEach((ids, depthIndex) => {
+		ids.forEach((id, index) => {
+			targets.set(id, {
+				x: (depths[depthIndex] ?? depthIndex) * schemaRankSpacing,
+				y: index * schemaNodeSpacing,
+			});
+		});
+	});
+
+	return targets;
+}
+
+function createRelationshipForceLayoutTargets(
+	orderedComponentIds: string[],
+	_graphNodeById: Map<string, SpiceDbGraphNode>,
+	componentEdges: SpiceDbGraphEdge[],
+) {
+	const componentIdSet = new Set(orderedComponentIds);
+	const indegreeById = new Map(orderedComponentIds.map((id) => [id, 0]));
+	const outgoingById = new Map(
+		orderedComponentIds.map((id) => [id, [] as string[]]),
+	);
+
+	for (const edge of componentEdges) {
+		if (!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))) {
+			continue;
+		}
+
+		outgoingById.get(edge.source)?.push(edge.target);
+		indegreeById.set(edge.target, (indegreeById.get(edge.target) ?? 0) + 1);
+	}
+
+	const depthById = new Map<string, number>();
+	const queue = orderedComponentIds.filter((id) => indegreeById.get(id) === 0);
+
+	for (const id of queue) {
+		depthById.set(id, 0);
+	}
+
+	while (queue.length > 0) {
+		const id = queue.shift();
+
+		if (!id) {
+			continue;
+		}
+
+		const nextDepth = (depthById.get(id) ?? 0) + 1;
+
+		for (const target of outgoingById.get(id) ?? []) {
+			if (nextDepth > (depthById.get(target) ?? -1)) {
+				depthById.set(target, nextDepth);
+				queue.push(target);
+			}
+		}
+	}
+
+	let fallbackDepth = Math.max(0, ...depthById.values());
+
+	for (const id of orderedComponentIds) {
+		if (!depthById.has(id)) {
+			depthById.set(id, fallbackDepth);
+			fallbackDepth += 1;
+		}
+	}
+
+	const idsByDepth = new Map<number, string[]>();
+
+	for (const id of orderedComponentIds) {
+		const depth = depthById.get(id) ?? 0;
+		idsByDepth.set(depth, [...(idsByDepth.get(depth) ?? []), id]);
+	}
+
+	const originalIndexById = new Map(
+		orderedComponentIds.map((id, index) => [id, index]),
+	);
+	const depths = Array.from(idsByDepth.keys()).sort(
+		(first, second) => first - second,
+	);
+	const layers = depths.map((depth) => idsByDepth.get(depth) ?? []);
+	const orderedLayers = reduceDirectedLayerCrossings(
+		layers,
+		componentEdges,
+		originalIndexById,
+	);
+	const widestLayerSize = Math.max(
+		1,
+		...orderedLayers.map((ids) => ids.length),
+	);
+	const targets: ForceLayoutTargets = new Map();
+
+	orderedLayers.forEach((ids, depthIndex) => {
+		const centeredLayerOffset =
+			((widestLayerSize - ids.length) * relationshipNodeSpacing) / 2;
+
+		ids.forEach((id, index) => {
+			targets.set(id, {
+				x: centeredLayerOffset + index * relationshipNodeSpacing,
+				y: (depths[depthIndex] ?? depthIndex) * relationshipGroupSpacing,
+			});
+		});
+	});
+
+	return targets;
+}
+
+function createForceLayoutTargets(
+	graph: SpiceDbGraph,
+	orderedComponentIds: string[],
+	graphNodeById: Map<string, SpiceDbGraphNode>,
+	componentEdges: SpiceDbGraphEdge[],
+) {
+	if (graph.mode === "schema") {
+		return createSchemaForceLayoutTargets(orderedComponentIds, componentEdges);
+	}
+
+	return createRelationshipForceLayoutTargets(
+		orderedComponentIds,
+		graphNodeById,
+		componentEdges,
+	);
+}
+
+function createForceSimulationNodes(
+	orderedComponentIds: string[],
+	graphNodeById: Map<string, SpiceDbGraphNode>,
+	targets: ForceLayoutTargets,
+) {
+	return orderedComponentIds.flatMap((id, index) => {
+		const graphNode = graphNodeById.get(id);
+
+		if (!graphNode) {
+			return [];
+		}
+
+		const size = nodeSizeByKind[graphNode.kind];
+		const target = targets.get(id) ?? { x: index * schemaRankSpacing, y: 0 };
+		const row = Math.floor(index / relationshipGroupColumns);
+		const column = index % relationshipGroupColumns;
+
+		return {
+			id,
+			graphNode,
+			height: size.height,
+			targetX: target.x,
+			targetY: target.y,
+			width: size.width,
+			x: target.x + column * 12,
+			y: target.y + row * 12,
+		};
+	});
+}
+
+function createForceSimulationLinks(componentEdges: SpiceDbGraphEdge[]) {
+	return componentEdges.map((edge) => ({
+		kind: edge.kind,
+		source: edge.source,
+		target: edge.target,
+	}));
+}
+
+function runForceLayout(
+	graph: SpiceDbGraph,
+	nodes: ForceLayoutNode[],
+	links: ForceLayoutLink[],
+) {
+	const linkDistance = (link: ForceLayoutLink) =>
+		link.kind === "relationship" ? 240 : 200;
+	const manyBodyStrength = graph.mode === "schema" ? -650 : -520;
+	const xStrength = graph.mode === "schema" ? 0.3 : 0.18;
+	const yStrength = graph.mode === "schema" ? 0.18 : 0.24;
+
+	forceSimulation(nodes)
+		.stop()
+		.force(
+			"link",
+			forceLink<ForceLayoutNode, ForceLayoutLink>(links)
+				.id((node) => node.id)
+				.distance(linkDistance)
+				.strength(0.45),
+		)
+		.force(
+			"charge",
+			forceManyBody<ForceLayoutNode>()
+				.strength(manyBodyStrength)
+				.distanceMax(900),
+		)
+		.force(
+			"collide",
+			forceCollide<ForceLayoutNode>(
+				(node) => Math.hypot(node.width, node.height) / 2 + nodeCollisionGap,
+			).iterations(3),
+		)
+		.force(
+			"x",
+			forceX<ForceLayoutNode>((node) => node.targetX).strength(xStrength),
+		)
+		.force(
+			"y",
+			forceY<ForceLayoutNode>((node) => node.targetY).strength(yStrength),
+		)
+		.tick(forceTickCount);
+
+	return nodes;
+}
+
+function createFlowNode(
+	node: ForceLayoutNode,
+	objectColorIndex: ReturnType<typeof createObjectColorIndex>,
+	onSelect: FlowNodeData["onSelect"],
+	searchMatches: Set<string>,
+	searchActive: boolean,
+	sourcePosition: Position,
+	targetPosition: Position,
+): FlowNode {
+	return {
+		id: node.graphNode.id,
+		type: "spicedb",
+		sourcePosition,
+		targetPosition,
+		position: {
+			x: (node.x ?? node.targetX) - node.width / 2,
+			y: (node.y ?? node.targetY) - node.height / 2,
+		},
+		style: {
+			height: node.height,
+			width: node.width,
+		},
+		data: {
+			...node.graphNode,
+			color: getNodeColor(node.graphNode, objectColorIndex),
+			onSelect,
+			searchActive,
+			searchMatched: searchMatches.has(node.graphNode.id),
+		},
+	};
+}
+
 function packLayoutComponents(components: FlowNode[][]) {
 	let cursorX = 0;
 	let cursorY = 0;
@@ -279,7 +764,6 @@ export function layoutGraph(
 	searchActive = searchMatches.size > 0,
 ) {
 	const layoutDirection = graph.mode === "schema" ? "horizontal" : "vertical";
-	const rankdir = graph.mode === "schema" ? "LR" : "TB";
 	const objectColorIndex = createObjectColorIndex(graph.nodes);
 	const graphNodeById = new Map(graph.nodes.map((node) => [node.id, node]));
 	const sourcePosition =
@@ -294,69 +778,34 @@ export function layoutGraph(
 			graph,
 		);
 		const componentIdSet = new Set(orderedComponentIds);
-		const dagre = new graphlib.Graph().setDefaultEdgeLabel(() => ({}));
-		dagre.setGraph({
-			acyclicer: "greedy",
-			edgesep: 48,
-			nodesep: 112,
-			ranker: "network-simplex",
-			rankdir,
-			ranksep: 168,
-		});
-
-		for (const id of orderedComponentIds) {
-			const node = graphNodeById.get(id);
-
-			if (!node) {
-				continue;
-			}
-
-			dagre.setNode(id, nodeSizeByKind[node.kind]);
-		}
-
-		for (const edge of graph.edges) {
-			if (componentIdSet.has(edge.source) && componentIdSet.has(edge.target)) {
-				dagre.setEdge(edge.source, edge.target, {
-					minlen: edge.kind === "relationship" ? 2 : 1,
-					weight: edge.kind === "relationship" ? 2 : 1,
-				});
-			}
-		}
-
-		layout(dagre);
-
-		const nodes: FlowNode[] = orderedComponentIds.flatMap((id) => {
-			const node = graphNodeById.get(id);
-
-			if (!node) {
-				return [];
-			}
-
-			const size = nodeSizeByKind[node.kind];
-			const positioned = dagre.node(id) as { x: number; y: number } | undefined;
-
-			return {
-				id: node.id,
-				type: "spicedb",
+		const componentEdges = graph.edges.filter(
+			(edge) =>
+				componentIdSet.has(edge.source) && componentIdSet.has(edge.target),
+		);
+		const targets = createForceLayoutTargets(
+			graph,
+			orderedComponentIds,
+			graphNodeById,
+			componentEdges,
+		);
+		const forceNodes = createForceSimulationNodes(
+			orderedComponentIds,
+			graphNodeById,
+			targets,
+		);
+		const forceLinks = createForceSimulationLinks(componentEdges);
+		const positionedNodes = runForceLayout(graph, forceNodes, forceLinks);
+		const nodes = positionedNodes.map((node) =>
+			createFlowNode(
+				node,
+				objectColorIndex,
+				onSelect,
+				searchMatches,
+				searchActive,
 				sourcePosition,
 				targetPosition,
-				position: {
-					x: (positioned?.x ?? 0) - size.width / 2,
-					y: (positioned?.y ?? 0) - size.height / 2,
-				},
-				style: {
-					height: size.height,
-					width: size.width,
-				},
-				data: {
-					...node,
-					color: getNodeColor(node, objectColorIndex),
-					onSelect,
-					searchActive,
-					searchMatched: searchMatches.has(node.id),
-				},
-			};
-		});
+			),
+		);
 
 		return positionNodesWithoutOverlap(nodes, layoutDirection);
 	});
