@@ -1,5 +1,6 @@
 import { Trash2Icon } from "lucide-react";
 
+import { ThemeToggle } from "#/components/theme/theme-toggle";
 import {
 	AlertDialog,
 	AlertDialogAction,
@@ -75,6 +76,7 @@ export function VisualizerHeader({
 					) : null}
 				</div>
 				<div className="flex flex-wrap items-center gap-2">
+					<ThemeToggle />
 					<Button
 						onClick={() => onModeChange("schema")}
 						type="button"

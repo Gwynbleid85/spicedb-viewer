@@ -4,6 +4,8 @@ import {
 	HeadContent,
 	Scripts,
 } from "@tanstack/react-router";
+import { ThemeProvider } from "#/components/theme/theme-provider";
+
 import appCss from "../styles.css?url";
 
 interface MyRouterContext {
@@ -19,6 +21,10 @@ export const Route = createRootRouteWithContext<MyRouterContext>()({
 			{
 				name: "viewport",
 				content: "width=device-width, initial-scale=1",
+			},
+			{
+				name: "theme-color",
+				content: "#e7f3ec",
 			},
 			{
 				title: "SpiceDB Viewer",
@@ -41,7 +47,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
 				<HeadContent />
 			</head>
 			<body>
-				{children}
+				<ThemeProvider>{children}</ThemeProvider>
 				<Scripts />
 			</body>
 		</html>

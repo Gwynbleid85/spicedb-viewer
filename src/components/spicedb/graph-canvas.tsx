@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo } from "react";
 
+import { useTheme } from "#/components/theme/theme-provider";
 import { Button } from "#/components/ui/button";
 import type { SpiceDbGraph } from "#/lib/spicedb-graph";
 
@@ -86,6 +87,7 @@ function DraggableGraph({
 	nodes: FlowNode[];
 	onSelect: (item: SelectedGraphItem) => void;
 }) {
+	const { theme } = useTheme();
 	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 	const organizeGraph = useCallback(() => {
@@ -112,7 +114,7 @@ function DraggableGraph({
 
 	return (
 		<ReactFlow
-			colorMode="system"
+			colorMode={theme}
 			edges={edges}
 			fitView
 			minZoom={0.15}

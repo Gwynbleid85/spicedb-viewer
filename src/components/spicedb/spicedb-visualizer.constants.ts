@@ -20,86 +20,86 @@ export const maxLayoutRowWidth = 1200;
 
 export const nodeColorByKind: Record<SpiceDbGraphNode["kind"], NodeColor> = {
 	caveat: {
-		badge: "border-chart-4 bg-chart-4/20 text-text-heading",
-		handle: "bg-chart-4",
-		node: "border-chart-4 bg-chart-4/10",
+		badge: "border-chart-10 bg-chart-10/30 text-text-heading",
+		handle: "bg-chart-10",
+		node: "border-chart-10 bg-chart-10/25",
 	},
 	definition: {
-		badge: "border-chart-1 bg-chart-1/20 text-text-heading",
-		handle: "bg-chart-1",
-		node: "border-chart-1 bg-chart-1/10",
+		badge: "border-chart-2 bg-chart-2/30 text-text-heading",
+		handle: "bg-chart-2",
+		node: "border-chart-2 bg-chart-2/25",
 	},
 	object: {
-		badge: "border-chart-5 bg-chart-5/20 text-text-heading",
-		handle: "bg-chart-5",
-		node: "border-chart-5 bg-chart-5/10",
+		badge: "border-chart-8 bg-chart-8/30 text-text-heading",
+		handle: "bg-chart-8",
+		node: "border-chart-8 bg-chart-8/25",
 	},
 	permission: {
-		badge: "border-chart-3 bg-chart-3/20 text-text-heading",
-		handle: "bg-chart-3",
-		node: "border-chart-3 bg-chart-3/10",
+		badge: "border-chart-4 bg-chart-4/30 text-text-heading",
+		handle: "bg-chart-4",
+		node: "border-chart-4 bg-chart-4/25",
 	},
 	relation: {
-		badge: "border-chart-2 bg-chart-2/20 text-text-heading",
-		handle: "bg-chart-2",
-		node: "border-chart-2 bg-chart-2/10",
+		badge: "border-chart-6 bg-chart-6/30 text-text-heading",
+		handle: "bg-chart-6",
+		node: "border-chart-6 bg-chart-6/25",
 	},
 	wildcard: {
-		badge: "border-chart-6 bg-chart-6/20 text-text-heading",
-		handle: "bg-chart-6",
-		node: "border-chart-6 bg-chart-6/10",
+		badge: "border-chart-3 bg-chart-3/30 text-text-heading",
+		handle: "bg-chart-3",
+		node: "border-chart-3 bg-chart-3/25",
 	},
 };
 
 export const objectColorScale = [
 	{
-		badge: "border-chart-1 bg-chart-1/20 text-text-heading",
-		handle: "bg-chart-1",
-		node: "border-chart-1 bg-chart-1/10",
-	},
-	{
-		badge: "border-chart-2 bg-chart-2/20 text-text-heading",
+		badge: "border-chart-2 bg-chart-2/30 text-text-heading",
 		handle: "bg-chart-2",
-		node: "border-chart-2 bg-chart-2/10",
+		node: "border-chart-2 bg-chart-2/25",
 	},
 	{
-		badge: "border-chart-3 bg-chart-3/20 text-text-heading",
-		handle: "bg-chart-3",
-		node: "border-chart-3 bg-chart-3/10",
-	},
-	{
-		badge: "border-chart-4 bg-chart-4/20 text-text-heading",
-		handle: "bg-chart-4",
-		node: "border-chart-4 bg-chart-4/10",
-	},
-	{
-		badge: "border-chart-5 bg-chart-5/20 text-text-heading",
-		handle: "bg-chart-5",
-		node: "border-chart-5 bg-chart-5/10",
-	},
-	{
-		badge: "border-chart-6 bg-chart-6/20 text-text-heading",
+		badge: "border-chart-6 bg-chart-6/30 text-text-heading",
 		handle: "bg-chart-6",
-		node: "border-chart-6 bg-chart-6/10",
+		node: "border-chart-6 bg-chart-6/25",
 	},
 	{
-		badge: "border-chart-7 bg-chart-7/20 text-text-heading",
-		handle: "bg-chart-7",
-		node: "border-chart-7 bg-chart-7/10",
+		badge: "border-chart-4 bg-chart-4/30 text-text-heading",
+		handle: "bg-chart-4",
+		node: "border-chart-4 bg-chart-4/25",
 	},
 	{
-		badge: "border-chart-8 bg-chart-8/20 text-text-heading",
-		handle: "bg-chart-8",
-		node: "border-chart-8 bg-chart-8/10",
-	},
-	{
-		badge: "border-chart-9 bg-chart-9/20 text-text-heading",
-		handle: "bg-chart-9",
-		node: "border-chart-9 bg-chart-9/10",
-	},
-	{
-		badge: "border-chart-10 bg-chart-10/20 text-text-heading",
+		badge: "border-chart-10 bg-chart-10/30 text-text-heading",
 		handle: "bg-chart-10",
-		node: "border-chart-10 bg-chart-10/10",
+		node: "border-chart-10 bg-chart-10/25",
+	},
+	{
+		badge: "border-chart-8 bg-chart-8/30 text-text-heading",
+		handle: "bg-chart-8",
+		node: "border-chart-8 bg-chart-8/25",
+	},
+	{
+		badge: "border-chart-3 bg-chart-3/30 text-text-heading",
+		handle: "bg-chart-3",
+		node: "border-chart-3 bg-chart-3/25",
+	},
+	{
+		badge: "border-chart-1 bg-chart-1/30 text-text-heading",
+		handle: "bg-chart-1",
+		node: "border-chart-1 bg-chart-1/25",
+	},
+	{
+		badge: "border-chart-7 bg-chart-7/30 text-text-heading",
+		handle: "bg-chart-7",
+		node: "border-chart-7 bg-chart-7/25",
+	},
+	{
+		badge: "border-chart-5 bg-chart-5/30 text-text-heading",
+		handle: "bg-chart-5",
+		node: "border-chart-5 bg-chart-5/25",
+	},
+	{
+		badge: "border-chart-9 bg-chart-9/30 text-text-heading",
+		handle: "bg-chart-9",
+		node: "border-chart-9 bg-chart-9/25",
 	},
 ] satisfies NodeColor[];
