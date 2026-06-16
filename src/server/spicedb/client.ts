@@ -77,21 +77,21 @@ function writeSpiceDbServerLog(
 	message: string,
 	context: SpiceDbLogContext,
 ) {
-	const payload = {
+	console[level](`[spicedb] ${message}`, {
 		...context,
 		level,
-		message,
 		timestamp: new Date().toISOString(),
-	};
-
-	console[level](`[spicedb] ${message}`, context);
-	process.stderr.write(`[spicedb] ${JSON.stringify(payload)}\n`);
+	});
 }
 
 export function logSpiceDbInfo(
 	message: string,
 	context: SpiceDbLogContext = {},
 ) {
+	if (process.env.SPICEDB_LOG_LEVEL !== "debug") {
+		return;
+	}
+
 	writeSpiceDbServerLog("info", message, {
 		...getSpiceDbLogContext(),
 		...context,

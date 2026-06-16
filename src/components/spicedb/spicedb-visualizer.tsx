@@ -32,19 +32,6 @@ import { VisualizerHeader } from "./visualizer-header";
 export { layoutGraph } from "./spicedb-graph-layout";
 export { matchesNodeSearch } from "./spicedb-graph-node-utils";
 
-function serializeClientError(error: unknown) {
-	if (error instanceof Error) {
-		return {
-			cause: error.cause,
-			message: error.message,
-			name: error.name,
-			stack: error.stack,
-		};
-	}
-
-	return { message: String(error) };
-}
-
 export function SpiceDbVisualizerPage() {
 	const [mode, setMode] = useState<SpiceDbGraphMode>("schema");
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
@@ -69,31 +56,7 @@ export function SpiceDbVisualizerPage() {
 	);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
-		queryFn: async () => {
-			const start = performance.now();
-			console.info("[spicedb] client graph request started", { mode });
-
-			try {
-				const graph = await fetchGraph({ data: { mode } });
-				console.info("[spicedb] client graph request completed", {
-					durationMs: Math.round(performance.now() - start),
-					edgeCount: graph.stats.edgeCount,
-					mode,
-					nodeCount: graph.stats.nodeCount,
-					readAt: graph.readAt,
-					relationshipCount: graph.stats.relationshipCount,
-					truncated: graph.truncated,
-				});
-				return graph;
-			} catch (error) {
-				console.error("[spicedb] client graph request failed", {
-					durationMs: Math.round(performance.now() - start),
-					error: serializeClientError(error),
-					mode,
-				});
-				throw error;
-			}
-		},
+		queryFn: () => fetchGraph({ data: { mode } }),
 		staleTime: 30_000,
 	});
 	const deleteRelationshipMutation = useMutation({

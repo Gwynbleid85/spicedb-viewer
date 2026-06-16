@@ -7,7 +7,7 @@ import {
 	useEdgesState,
 	useNodesState,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo } from "react";
 
 import { useTheme } from "#/components/theme/theme-provider";
 import { Button } from "#/components/ui/button";
@@ -49,39 +49,16 @@ export function GraphCanvas({
 	searchActive: boolean;
 	searchMatches: Set<string>;
 }) {
-	const flow = useMemo(() => {
-		const start = performance.now();
-		console.info("[spicedb] graph layout started", {
-			edgeCount: graph.edges.length,
-			mode: graph.mode,
-			nodeCount: graph.nodes.length,
-			searchActive,
-			searchMatchCount: searchMatches.size,
-		});
-
-		try {
-			const result = layoutGraph(
+	const flow = useMemo(
+		() =>
+			layoutGraph(
 				graph,
 				(node) => onSelect({ item: node, type: "node" }),
 				searchMatches,
 				searchActive,
-			);
-			console.info("[spicedb] graph layout completed", {
-				durationMs: Math.round(performance.now() - start),
-				edgeCount: result.edges.length,
-				mode: graph.mode,
-				nodeCount: result.nodes.length,
-			});
-			return result;
-		} catch (error) {
-			console.error("[spicedb] graph layout failed", {
-				durationMs: Math.round(performance.now() - start),
-				error,
-				mode: graph.mode,
-			});
-			throw error;
-		}
-	}, [graph, onSelect, searchActive, searchMatches]);
+			),
+		[graph, onSelect, searchActive, searchMatches],
+	);
 
 	if (graph.nodes.length === 0) {
 		return (
@@ -120,7 +97,6 @@ function DraggableGraph({
 	onSelectedRelationshipsChange: (relationships: SpiceDbGraphEdge[]) => void;
 }) {
 	const { theme } = useTheme();
-	const containerRef = useRef<HTMLDivElement>(null);
 	const [nodes, setNodes, onNodesChange] = useNodesState(initialNodes);
 	const [edges, setEdges, onEdgesChange] = useEdgesState(initialEdges);
 	const organizeGraph = useCallback(() => {
@@ -137,16 +113,6 @@ function DraggableGraph({
 		},
 		[onSelectedRelationshipsChange],
 	);
-
-	useEffect(() => {
-		const rect = containerRef.current?.getBoundingClientRect();
-		console.info("[spicedb] graph canvas mounted", {
-			edgeCount: initialEdges.length,
-			height: rect?.height,
-			nodeCount: initialNodes.length,
-			width: rect?.width,
-		});
-	}, [initialEdges.length, initialNodes.length]);
 
 	useEffect(() => {
 		setEdges(initialEdges);
@@ -166,7 +132,7 @@ function DraggableGraph({
 	}, [initialNodes, setNodes]);
 
 	return (
-		<div className="h-full w-full" ref={containerRef}>
+		<div className="h-full w-full">
 			<ReactFlow
 				colorMode={theme}
 				edges={edges}
