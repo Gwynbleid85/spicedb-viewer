@@ -253,6 +253,40 @@ describe("layoutGraph", () => {
 		);
 	});
 
+	it("lays out recursive schema relations without hanging", () => {
+		const nodes = [createSchemaNode("broker"), createSchemaNode("identity")];
+		const edges = [
+			{
+				id: "allows:definition:broker:definition:broker:parent",
+				kind: "allows" as const,
+				label: "parent",
+				metadata: {},
+				source: "definition:broker",
+				target: "definition:broker",
+			},
+			{
+				id: "allows:definition:broker:definition:identity:identity",
+				kind: "allows" as const,
+				label: "identity",
+				metadata: {},
+				source: "definition:broker",
+				target: "definition:identity",
+			},
+		];
+		const graph: SpiceDbGraph = {
+			edges,
+			mode: "schema",
+			nodes,
+			stats: createGraphStats({ edges, nodes }),
+			truncated: false,
+		};
+
+		const flow = layoutGraph(graph, () => undefined);
+
+		expect(flow.nodes).toHaveLength(2);
+		expect(flow.edges).toHaveLength(2);
+	});
+
 	it("separates nodes in a dense component", () => {
 		const nodes = Array.from({ length: 6 }, (_, index) =>
 			createRelationshipNode(index),

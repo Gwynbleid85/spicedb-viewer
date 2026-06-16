@@ -1,7 +1,7 @@
 import "@xyflow/react/dist/style.css";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { Alert, AlertDescription, AlertTitle } from "#/components/ui/alert";
 import type {
@@ -32,6 +32,19 @@ import { VisualizerHeader } from "./visualizer-header";
 export { layoutGraph } from "./spicedb-graph-layout";
 export { matchesNodeSearch } from "./spicedb-graph-node-utils";
 
+function serializeClientError(error: unknown) {
+	if (error instanceof Error) {
+		return {
+			cause: error.cause,
+			message: error.message,
+			name: error.name,
+			stack: error.stack,
+		};
+	}
+
+	return { message: String(error) };
+}
+
 export function SpiceDbVisualizerPage() {
 	const [mode, setMode] = useState<SpiceDbGraphMode>("schema");
 	const [selected, setSelected] = useState<SelectedGraphItem | null>(null);
@@ -56,7 +69,31 @@ export function SpiceDbVisualizerPage() {
 	);
 	const graphQuery = useQuery({
 		queryKey: ["spicedb-graph", mode],
-		queryFn: () => fetchGraph({ data: { mode } }),
+		queryFn: async () => {
+			const start = performance.now();
+			console.info("[spicedb] client graph request started", { mode });
+
+			try {
+				const graph = await fetchGraph({ data: { mode } });
+				console.info("[spicedb] client graph request completed", {
+					durationMs: Math.round(performance.now() - start),
+					edgeCount: graph.stats.edgeCount,
+					mode,
+					nodeCount: graph.stats.nodeCount,
+					readAt: graph.readAt,
+					relationshipCount: graph.stats.relationshipCount,
+					truncated: graph.truncated,
+				});
+				return graph;
+			} catch (error) {
+				console.error("[spicedb] client graph request failed", {
+					durationMs: Math.round(performance.now() - start),
+					error: serializeClientError(error),
+					mode,
+				});
+				throw error;
+			}
+		},
 		staleTime: 30_000,
 	});
 	const deleteRelationshipMutation = useMutation({
@@ -142,6 +179,24 @@ export function SpiceDbVisualizerPage() {
 			: "This will permanently delete every relationship in SpiceDB while leaving the schema intact.";
 
 	const graphUpdatedAt = graphQuery.dataUpdatedAt;
+	const handleSelectedRelationshipsChange = useCallback(
+		(relationships: SpiceDbGraphEdge[]) => {
+			setSelectedRelationships((previous) => {
+				if (
+					previous.length === relationships.length &&
+					previous.every(
+						(relationship, index) =>
+							relationship.id === relationships[index]?.id,
+					)
+				) {
+					return previous;
+				}
+
+				return relationships;
+			});
+		},
+		[],
+	);
 
 	useEffect(() => {
 		void graphUpdatedAt;
@@ -158,7 +213,7 @@ export function SpiceDbVisualizerPage() {
 					<GraphCanvas
 						graph={displayedGraph}
 						onSelect={setSelected}
-						onSelectedRelationshipsChange={setSelectedRelationships}
+						onSelectedRelationshipsChange={handleSelectedRelationshipsChange}
 						searchActive={searchActive}
 						searchMatches={searchMatches}
 					/>

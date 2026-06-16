@@ -419,7 +419,10 @@ function createSchemaForceLayoutTargets(
 	);
 
 	for (const edge of componentEdges) {
-		if (!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))) {
+		if (
+			edge.source === edge.target ||
+			!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))
+		) {
 			continue;
 		}
 
@@ -452,7 +455,7 @@ function createSchemaForceLayoutTargets(
 		const nextDepth = (depthById.get(id) ?? 0) + 1;
 
 		for (const target of outgoingById.get(id) ?? []) {
-			if (nextDepth > (depthById.get(target) ?? -1)) {
+			if (!depthById.has(target)) {
 				depthById.set(target, nextDepth);
 				queue.push(target);
 			}
@@ -513,7 +516,10 @@ function createRelationshipForceLayoutTargets(
 	);
 
 	for (const edge of componentEdges) {
-		if (!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))) {
+		if (
+			edge.source === edge.target ||
+			!(componentIdSet.has(edge.source) && componentIdSet.has(edge.target))
+		) {
 			continue;
 		}
 
@@ -538,7 +544,7 @@ function createRelationshipForceLayoutTargets(
 		const nextDepth = (depthById.get(id) ?? 0) + 1;
 
 		for (const target of outgoingById.get(id) ?? []) {
-			if (nextDepth > (depthById.get(target) ?? -1)) {
+			if (!depthById.has(target)) {
 				depthById.set(target, nextDepth);
 				queue.push(target);
 			}

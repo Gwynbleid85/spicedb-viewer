@@ -15,6 +15,18 @@ type SpiceDbConfig = {
 
 type RestRequestBody = Record<string, unknown>;
 
+type SpiceDbLogContext = Record<string, unknown>;
+
+type SerializedError = {
+	cause?: unknown;
+	code?: unknown;
+	details?: unknown;
+	message?: string;
+	metadata?: unknown;
+	name?: string;
+	stack?: string;
+};
+
 type SpiceDbRestClient = {
 	deleteRelationships: (body: RestRequestBody) => Promise<unknown>;
 	dependentRelations: (body: RestRequestBody) => Promise<unknown>;
@@ -26,6 +38,78 @@ let cachedGrpcClient: v1.ZedClientInterface | null = null;
 let cachedGrpcConfigKey: string | null = null;
 let cachedRestClient: SpiceDbRestClient | null = null;
 let cachedRestConfigKey: string | null = null;
+
+function getErrorProperty(error: object, key: string) {
+	return key in error ? (error as Record<string, unknown>)[key] : undefined;
+}
+
+function serializeError(error: unknown): SerializedError {
+	if (error instanceof Error) {
+		return {
+			cause: error.cause,
+			code: getErrorProperty(error, "code"),
+			details: getErrorProperty(error, "details"),
+			message: error.message,
+			metadata: getErrorProperty(error, "metadata"),
+			name: error.name,
+			stack: error.stack,
+		};
+	}
+
+	return {
+		message: String(error),
+	};
+}
+
+function getSpiceDbLogContext(): SpiceDbLogContext {
+	return {
+		caCertConfigured: Boolean(process.env.SPICEDB_CA_CERT_PATH),
+		endpoint: process.env.SPICEDB_ENDPOINT,
+		protocol: process.env.SPICEDB_PROTOCOL ?? "grpc",
+		relationshipExportLimit:
+			process.env.SPICEDB_RELATIONSHIP_EXPORT_LIMIT ?? "1000",
+		security: process.env.SPICEDB_SECURITY ?? "secure",
+	};
+}
+
+function writeSpiceDbServerLog(
+	level: "error" | "info",
+	message: string,
+	context: SpiceDbLogContext,
+) {
+	const payload = {
+		...context,
+		level,
+		message,
+		timestamp: new Date().toISOString(),
+	};
+
+	console[level](`[spicedb] ${message}`, context);
+	process.stderr.write(`[spicedb] ${JSON.stringify(payload)}\n`);
+}
+
+export function logSpiceDbInfo(
+	message: string,
+	context: SpiceDbLogContext = {},
+) {
+	writeSpiceDbServerLog("info", message, {
+		...getSpiceDbLogContext(),
+		...context,
+	});
+}
+
+export function logSpiceDbError(
+	operation: string,
+	error: unknown,
+	context: SpiceDbLogContext = {},
+) {
+	writeSpiceDbServerLog("error", "operation failed", {
+		...getSpiceDbLogContext(),
+		...context,
+		error: serializeError(error),
+		operation,
+	});
+}
 
 function requireEnv(name: string) {
 	const value = process.env[name];
@@ -124,6 +208,13 @@ export function getSpiceDbGrpcClient() {
 	}
 
 	cachedGrpcConfigKey = configKey;
+	logSpiceDbInfo("client created", {
+		caCertConfigured: Boolean(config.caCertPath),
+		endpoint: config.endpoint,
+		protocol: config.protocol,
+		relationshipExportLimit: config.relationshipExportLimit,
+		security: config.security,
+	});
 
 	return cachedGrpcClient;
 }
@@ -171,29 +262,57 @@ function unwrapRestResult(value: unknown) {
 
 function createSpiceDbRestClient(config: SpiceDbConfig): SpiceDbRestClient {
 	const baseUrl = createRestBaseUrl(config);
+	logSpiceDbInfo("client created", {
+		caCertConfigured: Boolean(config.caCertPath),
+		endpoint: config.endpoint,
+		protocol: config.protocol,
+		relationshipExportLimit: config.relationshipExportLimit,
+		security: config.security,
+	});
 
 	async function request(path: string, body: RestRequestBody, stream = false) {
-		const response = await fetch(`${baseUrl}${path}`, {
-			body: JSON.stringify(body),
-			headers: {
-				Authorization: `Bearer ${config.token}`,
-				"Content-Type": "application/json",
-			},
-			method: "POST",
-		});
-		const text = await response.text();
+		const start = performance.now();
+		let response: Response | undefined;
+		let text: string | undefined;
 
-		if (!response.ok) {
-			throw new Error(
-				text || `SpiceDB REST request failed with ${response.status}.`,
-			);
+		try {
+			response = await fetch(`${baseUrl}${path}`, {
+				body: JSON.stringify(body),
+				headers: {
+					Authorization: `Bearer ${config.token}`,
+					"Content-Type": "application/json",
+				},
+				method: "POST",
+			});
+			text = await response.text();
+			logSpiceDbInfo("REST request completed", {
+				durationMs: Math.round(performance.now() - start),
+				path,
+				status: response.status,
+				statusText: response.statusText,
+			});
+
+			if (!response.ok) {
+				throw new Error(
+					text || `SpiceDB REST request failed with ${response.status}.`,
+				);
+			}
+
+			if (stream) {
+				return parseRestStream(text).map(unwrapRestResult);
+			}
+
+			return unwrapRestResult(text ? JSON.parse(text) : {});
+		} catch (error) {
+			logSpiceDbError("REST request", error, {
+				durationMs: Math.round(performance.now() - start),
+				path,
+				responseBody: text,
+				status: response?.status,
+				statusText: response?.statusText,
+			});
+			throw error;
 		}
-
-		if (stream) {
-			return parseRestStream(text).map(unwrapRestResult);
-		}
-
-		return unwrapRestResult(text ? JSON.parse(text) : {});
 	}
 
 	return {

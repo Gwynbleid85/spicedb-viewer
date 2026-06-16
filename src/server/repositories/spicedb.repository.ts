@@ -9,6 +9,7 @@ import {
 	getSpiceDbConfig,
 	getSpiceDbGrpcClient,
 	getSpiceDbRestClient,
+	logSpiceDbInfo,
 } from "#/server/spicedb/client";
 
 type SchemaDependency = {
@@ -39,12 +40,27 @@ async function readGrpcSchemaDependencies(
 
 	for (const definition of reflection.definitions) {
 		for (const permission of definition.permissions) {
+			const start = performance.now();
+			logSpiceDbInfo("dependent relations request started", {
+				definitionName: definition.name,
+				permissionName: permission.name,
+				protocol: "grpc",
+			});
+
 			const response = await client.promises.dependentRelations(
 				v1.DependentRelationsRequest.create({
 					definitionName: definition.name,
 					permissionName: permission.name,
 				}),
 			);
+
+			logSpiceDbInfo("dependent relations request completed", {
+				definitionName: definition.name,
+				durationMs: Math.round(performance.now() - start),
+				permissionName: permission.name,
+				protocol: "grpc",
+				relationCount: response.relations.length,
+			});
 
 			dependencies.push(
 				...response.relations.map((relation) => ({
@@ -65,10 +81,25 @@ async function readRestSchemaDependencies(reflection: RestReflection) {
 
 	for (const definition of reflection.definitions ?? []) {
 		for (const permission of definition.permissions) {
+			const start = performance.now();
+			logSpiceDbInfo("dependent relations request started", {
+				definitionName: definition.name,
+				permissionName: permission.name,
+				protocol: "rest",
+			});
+
 			const response = (await client.dependentRelations({
 				definitionName: definition.name,
 				permissionName: permission.name,
 			})) as { relations?: SchemaDependency["relation"][] };
+
+			logSpiceDbInfo("dependent relations request completed", {
+				definitionName: definition.name,
+				durationMs: Math.round(performance.now() - start),
+				permissionName: permission.name,
+				protocol: "rest",
+				relationCount: response.relations?.length ?? 0,
+			});
 
 			dependencies.push(
 				...(response.relations ?? []).map((relation) => ({
@@ -183,19 +214,44 @@ async function exportRestRelationshipsWithLimit(limit: number) {
 
 export async function getSchemaGraph(): Promise<SpiceDbGraph> {
 	const config = getSpiceDbConfig();
+	const start = performance.now();
+
+	logSpiceDbInfo("schema reflection started", { protocol: config.protocol });
 
 	if (config.protocol === "rest") {
 		const reflection = (await getSpiceDbRestClient().reflectSchema({
 			optionalFilters: [],
 		})) as RestReflection;
-		const dependencies = await readRestSchemaDependencies(reflection);
+		logSpiceDbInfo("schema reflection completed", {
+			caveatCount: reflection.caveats?.length ?? 0,
+			definitionCount: reflection.definitions?.length ?? 0,
+			durationMs: Math.round(performance.now() - start),
+			protocol: config.protocol,
+			readAt: reflection.readAt?.token,
+		});
 
-		return createSchemaGraph({
+		const dependencyStart = performance.now();
+		const dependencies = await readRestSchemaDependencies(reflection);
+		logSpiceDbInfo("schema dependencies completed", {
+			dependencyCount: dependencies.length,
+			durationMs: Math.round(performance.now() - dependencyStart),
+			protocol: config.protocol,
+		});
+
+		const graph = createSchemaGraph({
 			definitions: reflection.definitions ?? [],
 			caveats: reflection.caveats ?? [],
 			dependencies,
 			readAt: reflection.readAt?.token,
 		});
+		logSpiceDbInfo("schema graph created", {
+			durationMs: Math.round(performance.now() - start),
+			edgeCount: graph.stats.edgeCount,
+			nodeCount: graph.stats.nodeCount,
+			protocol: config.protocol,
+		});
+
+		return graph;
 	}
 
 	const client = getSpiceDbGrpcClient();
@@ -204,22 +260,53 @@ export async function getSchemaGraph(): Promise<SpiceDbGraph> {
 			optionalFilters: [],
 		}),
 	);
-	const dependencies = await readGrpcSchemaDependencies(client, reflection);
+	logSpiceDbInfo("schema reflection completed", {
+		caveatCount: reflection.caveats.length,
+		definitionCount: reflection.definitions.length,
+		durationMs: Math.round(performance.now() - start),
+		protocol: config.protocol,
+		readAt: reflection.readAt?.token,
+	});
 
-	return createSchemaGraph({
+	const dependencyStart = performance.now();
+	const dependencies = await readGrpcSchemaDependencies(client, reflection);
+	logSpiceDbInfo("schema dependencies completed", {
+		dependencyCount: dependencies.length,
+		durationMs: Math.round(performance.now() - dependencyStart),
+		protocol: config.protocol,
+	});
+
+	const graph = createSchemaGraph({
 		definitions: reflection.definitions,
 		caveats: reflection.caveats,
 		dependencies,
 		readAt: reflection.readAt?.token,
 	});
+	logSpiceDbInfo("schema graph created", {
+		durationMs: Math.round(performance.now() - start),
+		edgeCount: graph.stats.edgeCount,
+		nodeCount: graph.stats.nodeCount,
+		protocol: config.protocol,
+	});
+
+	return graph;
 }
 
 export async function getRelationshipGraph(
 	limit?: number,
 ): Promise<SpiceDbGraph> {
 	const config = getSpiceDbConfig();
+	const start = performance.now();
 	const configuredLimit = config.relationshipExportLimit;
 	const effectiveLimit = Math.min(limit ?? configuredLimit, configuredLimit);
+
+	logSpiceDbInfo("relationship export started", {
+		configuredLimit,
+		effectiveLimit,
+		protocol: config.protocol,
+		requestedLimit: limit,
+	});
+
 	const { relationships, truncated } =
 		config.protocol === "rest"
 			? await exportRestRelationshipsWithLimit(effectiveLimit)
@@ -228,11 +315,28 @@ export async function getRelationshipGraph(
 					effectiveLimit,
 				);
 
-	return createRelationshipGraph({
+	logSpiceDbInfo("relationship export completed", {
+		durationMs: Math.round(performance.now() - start),
+		effectiveLimit,
+		protocol: config.protocol,
+		relationshipCount: relationships.length,
+		truncated,
+	});
+
+	const graph = createRelationshipGraph({
 		relationships,
 		limit: effectiveLimit,
 		truncated,
 	});
+	logSpiceDbInfo("relationship graph created", {
+		durationMs: Math.round(performance.now() - start),
+		edgeCount: graph.stats.edgeCount,
+		nodeCount: graph.stats.nodeCount,
+		protocol: config.protocol,
+		relationshipCount: graph.stats.relationshipCount,
+	});
+
+	return graph;
 }
 
 export type DeleteRelationshipInput = {
