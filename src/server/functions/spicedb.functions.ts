@@ -28,7 +28,7 @@ const deleteRelationshipInputSchema = z.object({
 });
 
 const deleteSelectedRelationshipsInputSchema = z.object({
-	relationships: z.array(deleteRelationshipInputSchema).min(1).max(100),
+	relationships: z.array(deleteRelationshipInputSchema).min(1).max(10_000),
 });
 
 export const getSpiceDbGraph = createServerFn({ method: "GET" })
