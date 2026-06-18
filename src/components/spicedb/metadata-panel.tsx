@@ -1,4 +1,5 @@
-import { Trash2Icon } from "lucide-react";
+import { CheckIcon, CopyIcon, Trash2Icon } from "lucide-react";
+import { useEffect, useState } from "react";
 
 import {
 	AlertDialog,
@@ -127,16 +128,62 @@ function ItemHeading({ kind, label }: { kind: string; label: string }) {
 function MetadataList({ metadata }: { metadata: Record<string, unknown> }) {
 	return (
 		<dl className="flex flex-col gap-3">
-			{Object.entries(metadata).map(([key, value]) => (
-				<div className="min-w-0" key={key}>
-					<dt className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
-						{key}
-					</dt>
-					<dd className="mt-1 break-words font-mono text-sm text-text-heading">
-						{Array.isArray(value) ? value.join(", ") : String(value ?? "none")}
-					</dd>
-				</div>
-			))}
+			{Object.entries(metadata).map(([key, value]) => {
+				const displayValue = Array.isArray(value)
+					? value.join(", ")
+					: String(value ?? "none");
+				const copyValue =
+					key === "objectId" && typeof value === "string"
+						? guidPartFromObjectId(value)
+						: null;
+
+				return (
+					<div className="min-w-0" key={key}>
+						<dt className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
+							{key}
+						</dt>
+						<dd className="mt-1 flex min-w-0 items-center gap-2 font-mono text-sm text-text-heading">
+							<span className="min-w-0 break-words">{displayValue}</span>
+							{copyValue ? <CopyGuidButton value={copyValue} /> : null}
+						</dd>
+					</div>
+				);
+			})}
 		</dl>
 	);
+}
+
+function CopyGuidButton({ value }: { value: string }) {
+	const [copied, setCopied] = useState(false);
+
+	useEffect(() => {
+		if (!copied) {
+			return;
+		}
+
+		const timeout = window.setTimeout(() => setCopied(false), 750);
+
+		return () => window.clearTimeout(timeout);
+	}, [copied]);
+
+	return (
+		<Button
+			aria-label={copied ? "GUID copied" : "Copy GUID"}
+			className="cursor-pointer"
+			onClick={() => {
+				void navigator.clipboard.writeText(value);
+				setCopied(true);
+			}}
+			size="icon-xs"
+			variant="ghost"
+		>
+			{copied ? <CheckIcon className="text-text-success" /> : <CopyIcon />}
+		</Button>
+	);
+}
+
+export function guidPartFromObjectId(objectId: string) {
+	const separatorIndex = objectId.lastIndexOf("_");
+
+	return separatorIndex === -1 ? objectId : objectId.slice(separatorIndex + 1);
 }

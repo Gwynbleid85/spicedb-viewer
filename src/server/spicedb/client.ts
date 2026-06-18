@@ -45,15 +45,20 @@ function getErrorProperty(error: object, key: string) {
 
 function serializeError(error: unknown): SerializedError {
 	if (error instanceof Error) {
-		return {
-			cause: error.cause,
+		const serialized: SerializedError = {
 			code: getErrorProperty(error, "code"),
 			details: getErrorProperty(error, "details"),
 			message: error.message,
-			metadata: getErrorProperty(error, "metadata"),
 			name: error.name,
-			stack: error.stack,
 		};
+
+		if (process.env.SPICEDB_LOG_LEVEL === "debug") {
+			serialized.cause = error.cause;
+			serialized.metadata = getErrorProperty(error, "metadata");
+			serialized.stack = error.stack;
+		}
+
+		return serialized;
 	}
 
 	return {
@@ -149,17 +154,29 @@ function parseProtocol(value: string | undefined): SpiceDbProtocol {
 	return value;
 }
 
+function validateEndpoint(endpoint: string, protocol: SpiceDbProtocol) {
+	if (protocol === "grpc" && /^https?:\/\//.test(endpoint)) {
+		throw new Error(
+			"SPICEDB_ENDPOINT must be host:port when SPICEDB_PROTOCOL=grpc. Remove the http(s):// scheme or set SPICEDB_PROTOCOL=rest.",
+		);
+	}
+}
+
 export function getSpiceDbConfig(): SpiceDbConfig {
+	const endpoint = requireEnv("SPICEDB_ENDPOINT");
+	const protocol = parseProtocol(process.env.SPICEDB_PROTOCOL);
 	const security = process.env.SPICEDB_SECURITY ?? "secure";
 
 	if (security !== "secure" && security !== "insecure-localhost") {
 		throw new Error("SPICEDB_SECURITY must be secure or insecure-localhost.");
 	}
 
+	validateEndpoint(endpoint, protocol);
+
 	return {
-		endpoint: requireEnv("SPICEDB_ENDPOINT"),
+		endpoint,
 		token: requireEnv("SPICEDB_TOKEN"),
-		protocol: parseProtocol(process.env.SPICEDB_PROTOCOL),
+		protocol,
 		security,
 		caCertPath: process.env.SPICEDB_CA_CERT_PATH,
 		relationshipExportLimit: parseLimit(
