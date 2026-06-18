@@ -233,6 +233,7 @@ export function SpiceDbVisualizerPage() {
 				<div className="pointer-events-auto max-h-full overflow-y-auto">
 					<MetadataPanel
 						deletePending={deleteRelationshipMutation.isPending}
+						onClose={() => setSelected(null)}
 						onDeleteRelationship={(input) =>
 							deleteRelationshipMutation.mutate(input)
 						}

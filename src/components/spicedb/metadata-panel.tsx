@@ -1,4 +1,4 @@
-import { CheckIcon, CopyIcon, Trash2Icon } from "lucide-react";
+import { CheckIcon, CopyIcon, Trash2Icon, XIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import {
@@ -24,10 +24,12 @@ import type {
 
 export function MetadataPanel({
 	deletePending,
+	onClose,
 	onDeleteRelationship,
 	selected,
 }: {
 	deletePending: boolean;
+	onClose: () => void;
 	onDeleteRelationship: (input: DeleteRelationshipMutationInput) => void;
 	selected: SelectedGraphItem | null;
 }) {
@@ -42,53 +44,58 @@ export function MetadataPanel({
 			<aside className="rounded-5xl border border-border-default bg-surface-overlay-soft p-5">
 				<div className="flex items-start justify-between gap-3">
 					<ItemHeading kind={selected.item.kind} label={selected.item.label} />
-					{deleteRequest ? (
-						<AlertDialog>
-							<AlertDialogTrigger
-								render={
-									<Button
-										disabled={deletePending}
-										size="icon-sm"
-										variant="destructive"
-									>
-										<Trash2Icon />
-										<span className="sr-only">Delete relationship</span>
-									</Button>
-								}
-							/>
-							<AlertDialogContent size="sm">
-								<AlertDialogHeader>
-									<AlertDialogMedia className="bg-destructive text-text-danger">
-										<Trash2Icon />
-									</AlertDialogMedia>
-									<AlertDialogTitle>Delete this relationship?</AlertDialogTitle>
-									<AlertDialogDescription>
-										This will permanently delete {selected.item.label} from{" "}
-										{String(selected.item.metadata.resource)} to{" "}
-										{String(selected.item.metadata.subject)}. This action cannot
-										be undone.
-									</AlertDialogDescription>
-								</AlertDialogHeader>
-								<AlertDialogFooter>
-									<AlertDialogCancel disabled={deletePending} variant="ghost">
-										Cancel
-									</AlertDialogCancel>
-									<AlertDialogAction
-										disabled={deletePending}
-										onClick={() =>
-											onDeleteRelationship({
-												...deleteRequest,
-												edgeId: selected.item.id,
-											})
-										}
-										variant="destructive"
-									>
-										{deletePending ? "Deleting..." : "Delete"}
-									</AlertDialogAction>
-								</AlertDialogFooter>
-							</AlertDialogContent>
-						</AlertDialog>
-					) : null}
+					<div className="flex shrink-0 items-center gap-2">
+						{deleteRequest ? (
+							<AlertDialog>
+								<AlertDialogTrigger
+									render={
+										<Button
+											disabled={deletePending}
+											size="icon-sm"
+											variant="destructive"
+										>
+											<Trash2Icon />
+											<span className="sr-only">Delete relationship</span>
+										</Button>
+									}
+								/>
+								<AlertDialogContent size="sm">
+									<AlertDialogHeader>
+										<AlertDialogMedia className="bg-destructive text-text-danger">
+											<Trash2Icon />
+										</AlertDialogMedia>
+										<AlertDialogTitle>
+											Delete this relationship?
+										</AlertDialogTitle>
+										<AlertDialogDescription>
+											This will permanently delete {selected.item.label} from{" "}
+											{String(selected.item.metadata.resource)} to{" "}
+											{String(selected.item.metadata.subject)}. This action
+											cannot be undone.
+										</AlertDialogDescription>
+									</AlertDialogHeader>
+									<AlertDialogFooter>
+										<AlertDialogCancel disabled={deletePending} variant="ghost">
+											Cancel
+										</AlertDialogCancel>
+										<AlertDialogAction
+											disabled={deletePending}
+											onClick={() =>
+												onDeleteRelationship({
+													...deleteRequest,
+													edgeId: selected.item.id,
+												})
+											}
+											variant="destructive"
+										>
+											{deletePending ? "Deleting..." : "Delete"}
+										</AlertDialogAction>
+									</AlertDialogFooter>
+								</AlertDialogContent>
+							</AlertDialog>
+						) : null}
+						<CloseMetadataButton onClose={onClose} />
+					</div>
 				</div>
 				<Separator className="my-4" />
 				<MetadataList metadata={selected.item.metadata} />
@@ -98,8 +105,9 @@ export function MetadataPanel({
 
 	return (
 		<aside className="rounded-5xl border border-border-default bg-surface-overlay-soft p-5">
-			<div className="flex items-center justify-between gap-3">
+			<div className="flex items-start justify-between gap-3">
 				<ItemHeading kind={selected.item.kind} label={selected.item.label} />
+				<CloseMetadataButton onClose={onClose} />
 			</div>
 			{selected.item.description ? (
 				<p className="mt-3 text-sm leading-6 text-text-caption">
@@ -114,14 +122,28 @@ export function MetadataPanel({
 
 function ItemHeading({ kind, label }: { kind: string; label: string }) {
 	return (
-		<div>
+		<div className="min-w-0">
 			<p className="text-xs font-bold uppercase tracking-[0.14em] text-text-kicker">
 				{kind}
 			</p>
-			<h2 className="mt-1 font-heading text-2xl font-bold text-text-heading">
+			<h2 className="mt-1 break-words font-heading text-2xl font-bold text-text-heading">
 				{label}
 			</h2>
 		</div>
+	);
+}
+
+function CloseMetadataButton({ onClose }: { onClose: () => void }) {
+	return (
+		<Button
+			aria-label="Close object info"
+			className="shrink-0 cursor-pointer"
+			onClick={onClose}
+			size="icon-xs"
+			variant="ghost"
+		>
+			<XIcon />
+		</Button>
 	);
 }
 
